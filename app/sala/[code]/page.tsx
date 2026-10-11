@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
-import { RoomClient } from "@/components/RoomClient";
+import type { Metadata } from 'next';
+import { RoomClient } from '@/components/RoomClient';
 
-export const metadata: Metadata = { title: "Sala · Macao" };
+export const metadata: Metadata = { title: 'Sala · Macao' };
 
 export default async function RoomPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;

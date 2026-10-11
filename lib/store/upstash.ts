@@ -1,6 +1,6 @@
-import { Redis } from "@upstash/redis";
-import type { Room } from "../types";
-import { ROOM_TTL_SECONDS, type RoomStore } from "./types";
+import { Redis } from '@upstash/redis';
+import type { Room } from '../types';
+import { ROOM_TTL_SECONDS, type RoomStore } from './types';
 
 const key = (code: string) => `macao:room:${code}`;
 
@@ -20,19 +20,23 @@ export class UpstashRoomStore implements RoomStore {
   async get(code: string) {
     const raw = await this.redis.get<unknown>(key(code));
     if (raw === null || raw === undefined) return null;
-    return (typeof raw === "string" ? JSON.parse(raw) : raw) as Room;
+    return (typeof raw === 'string' ? JSON.parse(raw) : raw) as Room;
   }
 
   async create(room: Room) {
     const res = await this.redis.set(key(room.code), JSON.stringify(room), { nx: true, ex: ROOM_TTL_SECONDS });
-    return res === "OK";
+    return res === 'OK';
+  }
+
+  async delete(code: string) {
+    await this.redis.del(key(code));
   }
 
   async compareAndSet(code: string, expectedVersion: number, next: Room) {
     const res = await this.redis.eval(
       CAS_SCRIPT,
       [key(code)],
-      [String(expectedVersion), JSON.stringify(next), String(ROOM_TTL_SECONDS)],
+      [String(expectedVersion), JSON.stringify(next), String(ROOM_TTL_SECONDS)]
     );
     return Number(res) === 1;
   }

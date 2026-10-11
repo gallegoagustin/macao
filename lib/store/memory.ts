@@ -1,5 +1,5 @@
-import type { Room } from "../types";
-import { ROOM_TTL_SECONDS, type RoomStore } from "./types";
+import type { Room } from '../types';
+import { ROOM_TTL_SECONDS, type RoomStore } from './types';
 
 interface Entry {
   room: string; // JSON, para no compartir referencias mutables
@@ -38,6 +38,10 @@ export class MemoryRoomStore implements RoomStore {
     if (this.read(room.code)) return false;
     this.write(room);
     return true;
+  }
+
+  async delete(code: string) {
+    this.rooms.delete(code);
   }
 
   async compareAndSet(code: string, expectedVersion: number, next: Room) {

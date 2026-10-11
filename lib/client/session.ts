@@ -4,7 +4,7 @@ export interface Session {
 }
 
 const key = (code: string) => `macao:session:${code.toUpperCase()}`;
-const NAME_KEY = "macao:name";
+const NAME_KEY = 'macao:name';
 
 export function loadSession(code: string): Session | null {
   try {
@@ -33,9 +33,9 @@ export function clearSession(code: string): void {
 
 export function loadName(): string {
   try {
-    return localStorage.getItem(NAME_KEY) ?? "";
+    return localStorage.getItem(NAME_KEY) ?? '';
   } catch {
-    return "";
+    return '';
   }
 }
 

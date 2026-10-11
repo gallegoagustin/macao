@@ -5,8 +5,8 @@ Macao (Polaco) multijugador para jugar entre amigos. Alguien crea una sala, reci
 ## Ejecutar en local
 
 ```bash
-npm install
-npm run dev        # http://localhost:3000
+pnpm install
+pnpm dev        # http://localhost:3000
 ```
 
 Sin variables de entorno de Redis se usa un store en memoria (`MemoryRoomStore`), así que funciona sin configurar nada. Para probar con varios jugadores abre otra ventana de incógnito (la identidad se guarda en `localStorage`).
@@ -15,8 +15,8 @@ Otros comandos:
 
 ```bash
 npm test           # vitest (motor de reglas)
-npm run typecheck  # tsc --noEmit
-npm run build
+pnpm typecheck  # tsc --noEmit
+pnpm build
 ```
 
 ## Conectar Upstash en Vercel
@@ -42,3 +42,12 @@ Las salas caducan a las 24 h desde la última escritura. Las escrituras usan un 
 3. Añade tests en `tests/`. Si la vista no es compatible con `PolacoView`, la mesa (`components/Table.tsx`) necesitará su propia variante.
 
 El selector de reglas del lobby todavía muestra un único set (Polaco): al añadir el segundo hay que alimentarlo con `listRuleSets()`.
+
+## pnpm en Vercel
+
+El proyecto usa `pnpm@11.5.2` (campo `packageManager`). Para que Vercel respete esa versión:
+
+- Variable de entorno `ENABLE_EXPERIMENTAL_COREPACK=1` en el proyecto (desde el dashboard).
+- Node.js Version 22.x o superior en Project Settings (pnpm 11 necesita Node >= 22.5).
+
+`pnpm-workspace.yaml` declara `packages: ['.']`, así que también instala con pnpm 9 si Vercel lo elige por su cuenta.

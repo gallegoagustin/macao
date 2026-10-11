@@ -1,7 +1,7 @@
-import { joinRoom } from "@/lib/server/rooms";
-import { handle, json, readBody } from "@/lib/server/http";
+import { joinRoom } from '@/lib/server/rooms';
+import { handle, json, readBody } from '@/lib/server/http';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 export function POST(req: Request, ctx: { params: Promise<{ code: string }> }) {
   return handle(async () => {

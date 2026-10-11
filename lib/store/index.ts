@@ -1,7 +1,7 @@
-import { Redis } from "@upstash/redis";
-import { MemoryRoomStore } from "./memory";
-import type { RoomStore } from "./types";
-import { UpstashRoomStore } from "./upstash";
+import { Redis } from '@upstash/redis';
+import { MemoryRoomStore } from './memory';
+import type { RoomStore } from './types';
+import { UpstashRoomStore } from './upstash';
 
 let store: RoomStore | null = null;
 

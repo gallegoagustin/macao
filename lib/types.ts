@@ -36,11 +36,13 @@ export interface RuleSet<S = unknown, A = unknown, V = unknown> {
   parseAction(raw: unknown): A | null;
   /** `rng` se inyecta (cripto en producción) para barajar/robar; el estado no guarda semillas. */
   applyAction(state: S, playerId: string, action: A, rng: () => number): ActionResult<S>;
+  /** Quita a un jugador de una partida en curso (quedan >= 2) y deja el juego consistente. */
+  removePlayer(state: S, playerId: string, rng: () => number): S;
   getView(state: S, playerId: string): V;
   getStatus(state: S): GameStatus;
 }
 
-export type RoomPhase = "lobby" | "playing" | "finished";
+export type RoomPhase = 'lobby' | 'playing' | 'finished';
 
 /** Sala tal como se guarda en el store (incluye tokens: nunca sale del servidor). */
 export interface Room {
@@ -53,6 +55,8 @@ export interface Room {
   ruleSetId: string;
   config: Record<string, number>;
   game: unknown | null;
+  /** Aviso para el lobby (partida finalizada o cancelada). Se borra al empezar otra. */
+  notice: string | null;
 }
 
 /** Vista de sala para un jugador concreto. */
@@ -66,6 +70,7 @@ export interface RoomView<V = unknown> {
   ruleSet: { id: string; name: string; description: string; config: ConfigField[] };
   config: Record<string, number>;
   game: V | null;
+  notice: string | null;
 }
 
 export type Unchanged = { unchanged: true };
