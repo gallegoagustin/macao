@@ -1,12 +1,15 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, api } from '@/lib/client/api';
 import { type Session, clearSession, loadName, loadSession, saveName, saveSession } from '@/lib/client/session';
+import { useMsg } from '@/lib/client/useMsg';
 import type { PolacoView } from '@/lib/rules/polaco';
 import type { RoomView } from '@/lib/types';
+import { LocaleSwitcher } from './LocaleSwitcher';
 import { Lobby } from './Lobby';
 import { Table } from './Table';
 
@@ -15,6 +18,8 @@ type Fatal = 'not_found' | 'kicked' | null;
 const POLL_MS = 1000;
 
 export function RoomClient({ code }: { code: string }) {
+  const t = useTranslations('room');
+  const renderMsg = useMsg();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [view, setView] = useState<RoomView | null>(null);
   const [fatal, setFatal] = useState<Fatal>(null);
@@ -23,6 +28,11 @@ export function RoomClient({ code }: { code: string }) {
   const router = useRouter();
   const versionRef = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // El polling no debe reiniciarse al cambiar de idioma: lee el traductor vigente desde una ref.
+  const renderMsgRef = useRef(renderMsg);
+  useEffect(() => {
+    renderMsgRef.current = renderMsg;
+  }, [renderMsg]);
 
   const notify = useCallback((msg: string) => {
     setToast(msg);
@@ -72,7 +82,7 @@ export function RoomClient({ code }: { code: string }) {
           stopped = true;
           return;
         }
-        if (e instanceof ApiError && e.code === 'network') notify(e.message);
+        if (e instanceof ApiError && e.code === 'error.network') notify(renderMsgRef.current(e.msg));
       } finally {
         inFlight = false;
       }
@@ -107,13 +117,13 @@ export function RoomClient({ code }: { code: string }) {
           clearSession(code);
           setFatal('kicked');
         } else {
-          notify(e instanceof Error ? e.message : 'Algo ha salido mal.');
+          notify(e instanceof ApiError ? renderMsg(e.msg) : t('genericError'));
         }
       } finally {
         setBusy(false);
       }
     },
-    [apply, code, notify]
+    [apply, code, notify, renderMsg, t]
   );
 
   const leave = useCallback(async () => {
@@ -124,14 +134,14 @@ export function RoomClient({ code }: { code: string }) {
     } catch (e) {
       // Si ya no eras miembro (401) o la sala ya no existe, igualmente te vas.
       if (!(e instanceof ApiError && (e.status === 401 || e.status === 404))) {
-        notify(e instanceof Error ? e.message : 'No se ha podido salir.');
+        notify(e instanceof ApiError ? renderMsg(e.msg) : t('leaveFailed'));
         setBusy(false);
         return;
       }
     }
     clearSession(code);
     router.push('/');
-  }, [code, token, notify, router]);
+  }, [code, token, notify, router, renderMsg, t]);
 
   /* ---------------------------- estados sin partida --------------------------- */
 
@@ -139,15 +149,11 @@ export function RoomClient({ code }: { code: string }) {
     return (
       <Centered>
         <h1 className='font-display text-3xl font-black text-brass-soft'>
-          {fatal === 'kicked' ? 'Ya no estás en esta sala' : 'Esta sala no existe'}
+          {fatal === 'kicked' ? t('kickedTitle') : t('notFoundTitle')}
         </h1>
-        <p className='mt-2 text-cream/70'>
-          {fatal === 'kicked'
-            ? 'El anfitrión te ha echado o tu sesión ha caducado.'
-            : 'Puede que haya caducado (las salas duran 24 horas) o que el código sea otro.'}
-        </p>
+        <p className='mt-2 text-cream/70'>{fatal === 'kicked' ? t('kickedBody') : t('notFoundBody')}</p>
         <Link href='/' className='btn btn-brass mt-6'>
-          Volver al inicio
+          {t('backHome')}
         </Link>
       </Centered>
     );
@@ -156,7 +162,7 @@ export function RoomClient({ code }: { code: string }) {
   if (session === undefined)
     return (
       <Centered>
-        <p className='text-cream/60'>Cargando…</p>
+        <p className='text-cream/60'>{t('loading')}</p>
       </Centered>
     );
 
@@ -168,7 +174,7 @@ export function RoomClient({ code }: { code: string }) {
     return (
       <Centered>
         <p className='text-cream/60' role='status'>
-          Entrando en la sala {code}…
+          {t('entering', { code })}
         </p>
       </Centered>
     );
@@ -215,12 +221,15 @@ export function RoomClient({ code }: { code: string }) {
 function Centered({ children }: { children: React.ReactNode }) {
   return (
     <main className='mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center px-6 text-center'>
+      <LocaleSwitcher className='absolute top-4 right-4' />
       {children}
     </main>
   );
 }
 
 function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => void }) {
+  const t = useTranslations('room');
+  const renderMsg = useMsg();
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -231,7 +240,7 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
 
   async function join(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return setError('Escribe tu apodo para entrar.');
+    if (!name.trim()) return setError(t('nickRequired'));
     setBusy(true);
     setError(null);
     try {
@@ -241,18 +250,18 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
       saveSession(code, s);
       onJoined(s);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Algo ha salido mal.');
+      setError(err instanceof ApiError ? renderMsg(err.msg) : t('genericError'));
       setBusy(false);
     }
   }
 
   return (
     <Centered>
-      <p className='text-sm font-semibold tracking-widest text-brass-soft uppercase'>Sala</p>
+      <p className='text-sm font-semibold tracking-widest text-brass-soft uppercase'>{t('roomLabel')}</p>
       <h1 className='font-display mb-6 text-6xl font-black tracking-[0.2em] text-brass-soft'>{code}</h1>
       <form onSubmit={join} className='flex w-full flex-col gap-4 text-left'>
         <label htmlFor='join-name' className='text-sm font-semibold tracking-wide text-brass-soft uppercase'>
-          Tu apodo
+          {t('nickLabel')}
         </label>
         <input
           id='join-name'
@@ -260,18 +269,18 @@ function JoinGate({ code, onJoined }: { code: string; onJoined: (s: Session) => 
           onChange={(e) => setName(e.target.value)}
           maxLength={20}
           autoComplete='nickname'
-          placeholder='Cómo te llamamos en la mesa'
+          placeholder={t('nickPlaceholder')}
           className='w-full rounded-2xl border border-cream/25 bg-black/25 px-4 text-cream placeholder:text-cream/45'
         />
         <button className='btn btn-brass w-full text-lg' disabled={busy}>
-          {busy ? 'Entrando…' : 'Unirme a la sala'}
+          {busy ? t('joining') : t('joinRoom')}
         </button>
         <p role='alert' className='min-h-6 text-center text-sm font-semibold text-[#ff9d8f]'>
           {error}
         </p>
       </form>
       <Link href='/' className='mt-2 text-sm text-cream/60 underline underline-offset-4'>
-        Volver al inicio
+        {t('backHome')}
       </Link>
     </Centered>
   );

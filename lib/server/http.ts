@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
+import { type Msg, type MsgParam, msg } from '../types';
 
+/** Error HTTP con un mensaje estable (`code` + `params`): el cliente lo traduce, el servidor no emite texto. */
 export class HttpError extends Error {
+  public msg: Msg;
   constructor(
     public status: number,
-    message: string,
-    public code?: string
+    code: string,
+    params?: Record<string, MsgParam>
   ) {
-    super(message);
+    super(code);
+    this.msg = msg(code, params);
   }
 }
 
@@ -25,13 +29,13 @@ export async function readBody(req: Request): Promise<Record<string, unknown>> {
   }
 }
 
-/** Envuelve un handler: convierte HttpError en respuesta JSON `{error, code?}`. */
+/** Envuelve un handler: convierte HttpError en respuesta JSON `{code, params?}`. */
 export async function handle(fn: () => Promise<Response>): Promise<Response> {
   try {
     return await fn();
   } catch (e) {
-    if (e instanceof HttpError) return json({ error: e.message, code: e.code }, e.status);
+    if (e instanceof HttpError) return json(e.msg, e.status);
     console.error(e);
-    return json({ error: 'Error interno del servidor.' }, 500);
+    return json(msg('error.internal'), 500);
   }
 }

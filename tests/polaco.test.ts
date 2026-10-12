@@ -9,6 +9,7 @@ import {
   polaco,
   validatePlay
 } from '@/lib/rules/polaco';
+import type { Msg } from '@/lib/types';
 
 /* ---------------------------- helpers de test ----------------------------- */
 
@@ -53,13 +54,21 @@ function mk(o: Setup = {}): PolacoState {
 
 function act(s: PolacoState, pid: number, a: PolacoAction, rng = seqRng(1)): PolacoState {
   const r = polaco.applyAction(s, `p${pid}`, a, rng);
-  if (!r.ok) throw new Error(`Acción rechazada: ${r.error}`);
+  if (!r.ok) throw new Error(`Acción rechazada: ${r.error.code}`);
   return r.state;
 }
-function fail(s: PolacoState, pid: number, a: PolacoAction): string {
+function failMsg(s: PolacoState, pid: number, a: PolacoAction): Msg {
   const r = polaco.applyAction(s, `p${pid}`, a, seqRng(1));
   if (r.ok) throw new Error('Se esperaba un rechazo');
   return r.error;
+}
+function fail(s: PolacoState, pid: number, a: PolacoAction): string {
+  return failMsg(s, pid, a).code;
+}
+/** Código del motivo cuando el rechazo envuelve otro (`rule.firstMustPlay`). */
+function failReason(s: PolacoState, pid: number, a: PolacoAction): string {
+  const m = failMsg(s, pid, a);
+  return m.code === 'rule.firstMustPlay' ? (m.params?.reason as Msg).code : m.code;
 }
 type PlayExtra = { demandRank?: '5' | '6' | '7' | '8' | '9' | '10' | null; demandSuit?: 'H' | 'S' | 'D' | 'C' };
 const play = (card: CardId | CardId[], extra: PlayExtra = {}): PolacoAction => ({
@@ -86,7 +95,7 @@ describe('jugada normal', () => {
   it('acepta palo o número y rechaza lo demás', () => {
     const s = mk({ top: '7H', hands: { 0: ['7S', 'KH', '9C', '5C'] } });
     expect(polaco.getView(s, 'p0').legal.plays.sort()).toEqual(['7S', 'KH'].sort());
-    expect(fail(s, 0, play('9C'))).toMatch(/no encaja/);
+    expect(fail(s, 0, play('9C'))).toBe('rule.noFit');
     const s2 = act(s, 0, play('7S'));
     expect(top(s2)).toBe('7S');
     expect(turnOf(s2)).toBe(1);
@@ -96,8 +105,8 @@ describe('jugada normal', () => {
 
   it('rechaza jugar fuera de turno y cartas que no tienes', () => {
     const s = mk({ top: '7H' });
-    expect(fail(s, 1, play('9C'))).toMatch(/turno/);
-    expect(fail(s, 0, play('5H'))).toMatch(/No tienes/);
+    expect(fail(s, 1, play('9C'))).toBe('rule.notYourTurn');
+    expect(fail(s, 0, play('5H'))).toBe('rule.notInHand');
   });
 });
 
@@ -117,7 +126,7 @@ describe('robar', () => {
     expect(r.drawn).toBe('KH');
     expect(turnOf(r)).toBe(0);
     expect(polaco.getView(r, 'p0').legal.plays).toEqual(['KH']);
-    expect(fail(r, 0, play('7S'))).toMatch(/robado/);
+    expect(fail(r, 0, play('7S'))).toBe('rule.drawnOnly');
     expect(fail(r, 0, play(['KH', '7S', '9C']))).toBeTruthy();
     expect(act(r, 0, play('KH')).pending?.kind).toBe('king');
   });
@@ -125,7 +134,7 @@ describe('robar', () => {
   it('no se puede robar con un pending (aceptar es el robo)', () => {
     const s = mk({ top: '2H', hands: { 0: ['9S', '9C'] }, patch: { pending: { kind: 'draw', amount: 2 } } });
     expect(polaco.getView(s, 'p0').legal.canDraw).toBe(false);
-    expect(fail(s, 0, { type: 'draw' })).toMatch(/pendiente/);
+    expect(fail(s, 0, { type: 'draw' })).toBe('rule.drawPendingAccept');
   });
 
   it('robar voluntariamente y pasar no hereda la jugada libre de una Q', () => {
@@ -152,8 +161,8 @@ describe('robar', () => {
     expect(turnOf(r)).toBe(0);
     expect(r.drawn).toBe('KH');
     expect(polaco.getView(r, 'p0').legal.plays).toEqual(['KH']);
-    expect(fail(r, 0, play('9S'))).toMatch(/robado/);
-    expect(fail(r, 0, { type: 'draw' })).toMatch(/Ya has robado/);
+    expect(fail(r, 0, play('9S'))).toBe('rule.drawnOnly');
+    expect(fail(r, 0, { type: 'draw' })).toBe('rule.alreadyDrew');
     const played = act(r, 0, play('KH'));
     expect(top(played)).toBe('KH');
     const passed = act(r, 0, { type: 'pass' });
@@ -163,7 +172,7 @@ describe('robar', () => {
 
   it('no se puede pasar sin haber robado', () => {
     const s = mk({ top: '7H', hands: { 0: ['9S', '9C'] } });
-    expect(fail(s, 0, { type: 'pass' })).toMatch(/pasar/);
+    expect(fail(s, 0, { type: 'pass' })).toBe('rule.passOnly');
   });
 
   it('mazo vacío: se remezcla el descarte menos la carta de arriba', () => {
@@ -228,10 +237,10 @@ describe('robo acumulable (2 y 3)', () => {
       hands: { 0: ['QH', 'KH', '4H', '9H', '3S'] },
       patch: { pending: { kind: 'draw', amount: 2 } }
     });
-    expect(fail(s, 0, play('QH'))).toMatch(/robo pendiente/);
-    expect(fail(s, 0, play('KH'))).toMatch(/robo pendiente/);
-    expect(fail(s, 0, play('4H'))).toMatch(/robo pendiente/);
-    expect(fail(s, 0, play('9H'))).toMatch(/robo pendiente/);
+    expect(fail(s, 0, play('QH'))).toBe('rule.drawPending');
+    expect(fail(s, 0, play('KH'))).toBe('rule.drawPending');
+    expect(fail(s, 0, play('4H'))).toBe('rule.drawPending');
+    expect(fail(s, 0, play('9H'))).toBe('rule.drawPending');
     expect(fail(s, 0, { type: 'draw' })).toBeTruthy();
     expect(polaco.getView(s, 'p0').legal.plays).toEqual(['3S']);
   });
@@ -267,8 +276,8 @@ describe('salto acumulable (4)', () => {
       hands: { 0: ['9H', 'QH', '4C'] },
       patch: { pending: { kind: 'skip', count: 1 } }
     });
-    expect(fail(s, 0, play('9H'))).toMatch(/salto pendiente/);
-    expect(fail(s, 0, play('QH'))).toMatch(/salto pendiente/);
+    expect(fail(s, 0, play('9H'))).toBe('rule.skipPending');
+    expect(fail(s, 0, play('QH'))).toBe('rule.skipPending');
     expect(fail(s, 0, { type: 'draw' })).toBeTruthy();
   });
 
@@ -309,11 +318,11 @@ describe('Q (comodín)', () => {
 
   it('rechazada sobre una cadena de robo, un salto o una K', () => {
     const base = { top: '2H' as CardId, hands: { 0: ['QH', 'QS', '3S'] as CardId[] } };
-    expect(fail(mk({ ...base, patch: { pending: { kind: 'draw', amount: 2 } } }), 0, play('QH'))).toMatch(
-      /robo pendiente/
+    expect(fail(mk({ ...base, patch: { pending: { kind: 'draw', amount: 2 } } }), 0, play('QH'))).toBe(
+      'rule.drawPending'
     );
-    expect(fail(mk({ ...base, patch: { pending: { kind: 'skip', count: 1 } } }), 0, play('QH'))).toMatch(
-      /salto pendiente/
+    expect(fail(mk({ ...base, patch: { pending: { kind: 'skip', count: 1 } } }), 0, play('QH'))).toBe(
+      'rule.skipPending'
     );
     const k = mk({
       top: 'KH',
@@ -321,7 +330,7 @@ describe('Q (comodín)', () => {
       turn: 0,
       patch: { pending: { kind: 'king', from: 'p3', target: 'p0', card: 'KH' } }
     });
-    expect(fail(k, 0, play('QH'))).toMatch(/K/);
+    expect(fail(k, 0, play('QH'))).toBe('rule.kingOnlyRespond');
   });
 });
 
@@ -335,7 +344,7 @@ describe('J (exige un número)', () => {
     });
     s = act(s, 0, play('JH', { demandRank: '9' }));
     expect(s.demand).toEqual({ kind: 'rank', rank: '9', by: 'p0', turnsLeft: 4 });
-    expect(fail(s, 1, play('5D'))).toMatch(/exigen un 9/i);
+    expect(failMsg(s, 1, play('5D'))).toEqual({ code: 'rule.demandRank', params: { rank: '9' } });
     expect(polaco.getView(s, 'p1').legal.plays.sort()).toEqual(['9S']);
     s = act(s, 1, play('9S')); // cumple
     expect(top(s)).toBe('9S');
@@ -366,14 +375,14 @@ describe('J (exige un número)', () => {
 
   it('hay que elegir número o «Nada» al tirar una J', () => {
     const s = mk({ top: '7H', hands: { 0: ['JH', '9C'] } });
-    expect(fail(s, 0, play('JH'))).toMatch(/Elige/);
+    expect(fail(s, 0, play('JH'))).toBe('rule.pickRank');
     expect(fail(s, 0, play('JH', { demandRank: '4' as never }))).toBeTruthy();
   });
 
   it('Q bloqueada bajo demanda de J', () => {
     let s = mk({ top: '7H', hands: { 0: ['JH', '9C'], 1: ['QH', '9S'] } });
     s = act(s, 0, play('JH', { demandRank: '9' }));
-    expect(fail(s, 1, play('QH'))).toMatch(/Q bajo la demanda/);
+    expect(fail(s, 1, play('QH'))).toBe('rule.noQUnderJ');
   });
 
   it('quien no puede cumplir roba 1 y puede jugar la robada si cumple', () => {
@@ -429,12 +438,12 @@ describe('A (exige un palo)', () => {
     s = act(s, 0, play('AH', { demandSuit: 'S' }));
     expect(s.demand).toEqual({ kind: 'suit', suit: 'S', by: 'p0', turnsLeft: 3 });
     expect(polaco.getView(s, 'p1').legal.plays.sort()).toEqual(['5S', 'AC']);
-    expect(fail(s, 1, play('9H'))).toMatch(/Te exigen/);
+    expect(fail(s, 1, play('9H'))).toMatch(/^rule\.demand(Rank|Suit)$/);
   });
 
   it('hay que elegir palo', () => {
     const s = mk({ top: '7H', hands: { 0: ['AH', '9C'] } });
-    expect(fail(s, 0, play('AH'))).toMatch(/palo/);
+    expect(fail(s, 0, play('AH'))).toBe('rule.pickSuit');
   });
 
   it('A sobre A reemplaza la demanda', () => {
@@ -447,7 +456,7 @@ describe('A (exige un palo)', () => {
   it('solo la Q del palo exigido es válida bajo A', () => {
     let s = mk({ top: '7H', hands: { 0: ['AH', '9C'], 1: ['QH', 'QS', '5S'] } });
     s = act(s, 0, play('AH', { demandSuit: 'S' }));
-    expect(fail(s, 1, play('QH'))).toMatch(/única Q válida/);
+    expect(fail(s, 1, play('QH'))).toBe('rule.qUnderAce');
     s = act(s, 1, play('QS'));
     expect(s.freePlay).toBe(false);
     expect(s.demand?.kind).toBe('suit');
@@ -487,7 +496,7 @@ describe('K de corazones / picas', () => {
     let s = act(s0, 0, play('KH'));
     expect(s.pending).toEqual({ kind: 'king', from: 'p0', target: 'p1', card: 'KH' });
     expect(turnOf(s)).toBe(1);
-    expect(fail(s, 2, { type: 'accept' })).toMatch(/Esperando a que Bian/);
+    expect(failMsg(s, 2, { type: 'accept' })).toEqual({ code: 'rule.waitingKing', params: { name: 'Bian' } });
     const before = s.hands.p1.length;
     s = act(s, 1, { type: 'accept' });
     expect(s.hands.p1).toHaveLength(before + 5);
@@ -566,7 +575,7 @@ describe('K de corazones / picas', () => {
       patch: { pending: { kind: 'king', from: 'p0', target: 'p1', card: 'KH' } }
     });
     for (const c of ['QH', '2H', '3H', '4H', 'KH'] as CardId[]) {
-      expect(fail(s, 1, play(c))).toMatch(/KS|K♠/);
+      expect(failMsg(s, 1, play(c))).toEqual({ code: 'rule.kingOnlyRespond', params: { card: 'KS' } });
     }
     expect(polaco.getView(s, 'p1').legal.plays).toEqual(['KS']);
     expect(polaco.getView(s, 'p1').legal.canAccept).toBe(true);
@@ -581,7 +590,7 @@ describe('K de corazones / picas', () => {
 
   it('K♥ solo se tira con corazones u otra K', () => {
     const s = mk({ top: '7S', hands: { 0: ['KH', '9C'] } });
-    expect(fail(s, 0, play('KH'))).toMatch(/no encaja/);
+    expect(fail(s, 0, play('KH'))).toBe('rule.noFit');
     const s2 = mk({ top: 'KC', hands: { 0: ['KH', '9C'] } });
     expect(act(s2, 0, play('KH')).pending?.kind).toBe('king');
   });
@@ -627,12 +636,18 @@ describe('createGame', () => {
   });
 
   it('validación: 2-8 jugadores y cartas × jugadores <= 40', () => {
-    expect(polaco.validate?.(1, { handSize: 5 })).toMatch(/2 jugadores/);
-    expect(polaco.validate?.(9, { handSize: 3 })).toMatch(/Máximo 8/);
-    expect(polaco.validate?.(8, { handSize: 6 })).toMatch(/máximo es 5/);
+    expect(polaco.validate?.(1, { handSize: 5 })).toEqual({ code: 'validate.minPlayers', params: { min: 2 } });
+    expect(polaco.validate?.(9, { handSize: 3 })).toEqual({ code: 'validate.maxPlayers', params: { max: 8 } });
+    expect(polaco.validate?.(8, { handSize: 6 })).toEqual({
+      code: 'validate.maxPerPlayer',
+      params: { players: 8, max: 5 }
+    });
     expect(polaco.validate?.(8, { handSize: 5 })).toBeNull();
     expect(polaco.validate?.(4, { handSize: 10 })).toBeNull();
-    expect(polaco.validate?.(5, { handSize: 9 })).toMatch(/máximo es 8/);
+    expect(polaco.validate?.(5, { handSize: 9 })).toEqual({
+      code: 'validate.maxPerPlayer',
+      params: { players: 5, max: 8 }
+    });
   });
 });
 
@@ -663,7 +678,7 @@ describe('victoria', () => {
     expect(s.winner).toBe('p0');
     expect(s.pending).toBeNull();
     expect(polaco.getStatus(s)).toEqual({ finished: true, winnerId: 'p0' });
-    expect(fail(s, 1, play('5D'))).toMatch(/terminado/);
+    expect(fail(s, 1, play('5D'))).toBe('rule.gameOver');
   });
 
   it('ganar con una J no exige elegir número', () => {
@@ -914,7 +929,7 @@ describe('la Q y la demanda', () => {
     expect(s.demand).toEqual({ kind: 'suit', suit: 'S', by: 'p0', turnsLeft: 2 }); // sigue contando la vuelta
     // El siguiente sigue obligado: palo exigido u otra A (o robar)
     expect(polaco.getView(s, 'p2').legal.plays.sort()).toEqual(['8S', 'AC']);
-    expect(fail(s, 2, play('8C'))).toMatch(/Te exigen/);
+    expect(fail(s, 2, play('8C'))).toMatch(/^rule\.demand(Rank|Suit)$/);
   });
 
   it('la demanda sigue su vuelta completa tras la Q y caduca a su hora', () => {
@@ -924,13 +939,13 @@ describe('la Q y la demanda', () => {
     s = act(s, 2, play('8S')); // 1
     expect(s.demand?.turnsLeft).toBe(1);
     expect(turnOf(s)).toBe(0);
-    expect(fail(s, 0, play('9C'))).toMatch(/Te exigen/); // quien la tiró también cumple
+    expect(fail(s, 0, play('9C'))).toMatch(/^rule\.demand(Rank|Suit)$/); // quien la tiró también cumple
   });
 
   it('bajo demanda de J la Q sigue siendo ilegal', () => {
     let s = mk({ top: '7H', hands: { 0: ['JH', '9C'], 1: ['QH', '9S'] } });
     s = act(s, 0, play('JH', { demandRank: '9' }));
-    expect(fail(s, 1, play('QH'))).toMatch(/Q bajo la demanda/);
+    expect(fail(s, 1, play('QH'))).toBe('rule.noQUnderJ');
   });
 
   it('fuera de una demanda la Q sigue dando jugada libre', () => {
@@ -971,41 +986,41 @@ describe('escaleras', () => {
 
   it('K-A-2 (con vuelta) se rechaza, igual que 2-A-K', () => {
     const s = tableHand(['KH', 'AS', '2D']);
-    expect(fail(s, 0, play(['KH', 'AS', '2D']))).toMatch(/escalera/);
-    expect(fail(tableHand(['2H', 'AS', 'KD']), 0, play(['2H', 'AS', 'KD']))).toMatch(/escalera/);
+    expect(fail(s, 0, play(['KH', 'AS', '2D']))).toBe('rule.multiShape');
+    expect(fail(tableHand(['2H', 'AS', 'KD']), 0, play(['2H', 'AS', 'KD']))).toBe('rule.multiShape');
   });
 
   it('cualquier longitud >= 3, pero con 2 cartas no hay escalera', () => {
     const five = tableHand(['5H', '6S', '7D', '8C', '9H']);
     const r = act(five, 0, play(['5H', '6S', '7D', '8C', '9H']));
     expect(r.hands.p0).toEqual(['2C']);
-    expect(fail(tableHand(['7S', '8D']), 0, play(['7S', '8D']))).toMatch(/al menos 3/);
+    expect(fail(tableHand(['7S', '8D']), 0, play(['7S', '8D']))).toBe('rule.multiMin');
   });
 
   it('los números deben ser consecutivos', () => {
-    expect(fail(tableHand(['7S', '9D', '10C']), 0, play(['7S', '9D', '10C']))).toMatch(/escalera/);
-    expect(fail(tableHand(['7S', '8D', '8C']), 0, play(['7S', '8D', '8C']))).toMatch(/escalera/);
+    expect(fail(tableHand(['7S', '9D', '10C']), 0, play(['7S', '9D', '10C']))).toBe('rule.multiShape');
+    expect(fail(tableHand(['7S', '8D', '8C']), 0, play(['7S', '8D', '8C']))).toBe('rule.multiShape');
   });
 
   it('la primera carta tiene que encajar en la mesa', () => {
-    expect(fail(tableHand(['8S', '9S', '10S']), 0, play(['8S', '9S', '10S']))).toMatch(/no encaja/);
+    expect(failReason(tableHand(['8S', '9S', '10S']), 0, play(['8S', '9S', '10S']))).toBe('rule.noFit');
     // aunque otra carta de la escalera sí encajara, la primera es la que cuenta
-    expect(fail(tableHand(['6D', '7S', '8D']), 0, play(['6D', '7S', '8D']))).toMatch(/no encaja/);
+    expect(failReason(tableHand(['6D', '7S', '8D']), 0, play(['6D', '7S', '8D']))).toBe('rule.noFit');
   });
 
   it('bajo demanda, la primera carta debe cumplirla y la demanda sigue su vuelta', () => {
     const suitDemand = { demand: { kind: 'suit', suit: 'S', by: 'p3', turnsLeft: 4 } as const };
     const okS = act(tableHand(['5S', '6H', '7C'], { patch: suitDemand }), 0, play(['5S', '6H', '7C']));
     expect(okS.demand?.turnsLeft).toBe(3);
-    expect(fail(tableHand(['5H', '6H', '7H'], { patch: suitDemand }), 0, play(['5H', '6H', '7H']))).toMatch(
-      /Te exigen/
+    expect(failReason(tableHand(['5H', '6H', '7H'], { patch: suitDemand }), 0, play(['5H', '6H', '7H']))).toMatch(
+      /^rule\.demand(Rank|Suit)$/
     );
     const rankDemand = { demand: { kind: 'rank', rank: '6', by: 'p3', turnsLeft: 4 } as const };
     expect(
       act(tableHand(['6H', '7H', '8H'], { patch: rankDemand }), 0, play(['6H', '7H', '8H'])).demand?.turnsLeft
     ).toBe(3);
-    expect(fail(tableHand(['7H', '8H', '9H'], { patch: rankDemand }), 0, play(['7H', '8H', '9H']))).toMatch(
-      /Te exigen/
+    expect(failReason(tableHand(['7H', '8H', '9H'], { patch: rankDemand }), 0, play(['7H', '8H', '9H']))).toMatch(
+      /^rule\.demand(Rank|Suit)$/
     );
   });
 
@@ -1016,7 +1031,7 @@ describe('escaleras', () => {
       amount: 2
     });
     // acabar en J pide demanda
-    expect(fail(tableHand(['9H', '10S', 'JD']), 0, play(['9H', '10S', 'JD']))).toMatch(/Elige/);
+    expect(fail(tableHand(['9H', '10S', 'JD']), 0, play(['9H', '10S', 'JD']))).toBe('rule.pickRank');
     const j = act(tableHand(['9H', '10S', 'JD']), 0, play(['9H', '10S', 'JD'], { demandRank: '6' }));
     expect(j.demand).toMatchObject({ kind: 'rank', rank: '6' });
     // acabar en Q da jugada libre
@@ -1044,26 +1059,26 @@ describe('escaleras', () => {
       hands: { 0: ['2D', '3S', '4C', '9C'] },
       patch: { pending: { kind: 'draw', amount: 2 } }
     });
-    expect(fail(draw, 0, play(['2D', '3S', '4C']))).toMatch(/robo pendiente/);
+    expect(fail(draw, 0, play(['2D', '3S', '4C']))).toBe('rule.drawGroupOnly');
     const skip = mk({
       top: '4H',
       hands: { 0: ['4D', '5S', '6C', '9C'] },
       patch: { pending: { kind: 'skip', count: 1 } }
     });
-    expect(fail(skip, 0, play(['4D', '5S', '6C']))).toMatch(/salto pendiente/);
+    expect(fail(skip, 0, play(['4D', '5S', '6C']))).toBe('rule.skipGroupOnly');
     const king = mk({
       top: 'KH',
       hands: { 0: ['KS', 'QD', 'JH', '9C'] },
       patch: { pending: { kind: 'king', from: 'p3', target: 'p0', card: 'KH' } }
     });
-    expect(fail(king, 0, play(['KS', 'QD', 'JH']))).toMatch(/K pendiente/);
+    expect(fail(king, 0, play(['KS', 'QD', 'JH']))).toBe('rule.kingMulti');
   });
 
   it('tras robar solo se puede jugar la carta robada, no una escalera', () => {
     const s = mk({ top: '7H', hands: { 0: ['7S', '8D', '9C', '2C'] }, deck: ['4C', '7D'] });
     const r = act(s, 0, { type: 'draw' }); // roba 7D (jugable)
     expect(r.drawn).toBe('7D');
-    expect(fail(r, 0, play(['7S', '8D', '9C']))).toMatch(/robado/);
+    expect(fail(r, 0, play(['7S', '8D', '9C']))).toBe('rule.drawnOnly');
   });
 
   it('ganar con una escalera con toda la mano ignora el efecto y no pide demanda', () => {
@@ -1118,7 +1133,7 @@ describe('grupos del mismo número', () => {
       mk({ top: '3H', hands: { 0: [...cards, '9C'] }, patch: { pending: { kind: 'draw', amount: 3 } } });
     const ok = act(chain(['2S', '2C', '2D']), 0, play(['2S', '2C', '2D']));
     expect(ok.pending).toEqual({ kind: 'draw', amount: 9 });
-    expect(fail(chain(['5S', '5C', '5D']), 0, play(['5S', '5C', '5D']))).toMatch(/robo pendiente/);
+    expect(fail(chain(['5S', '5C', '5D']), 0, play(['5S', '5C', '5D']))).toBe('rule.drawGroupOnly');
   });
 
   it('n treses = +3n, n cuatros = n saltos (también sobre una cadena de saltos)', () => {
@@ -1143,18 +1158,18 @@ describe('grupos del mismo número', () => {
     // un grupo de otro número no responde a un salto, ni un grupo de 4 a un robo
     expect(
       fail({ ...chain, hands: { ...chain.hands, p0: ['5S', '5C', '5D', '9C'] } }, 0, play(['5S', '5C', '5D']))
-    ).toMatch(/salto pendiente/);
+    ).toBe('rule.skipGroupOnly');
     const drawChain = mk({
       top: '2H',
       hands: { 0: ['4S', '4C', '4D', '9C'] },
       patch: { pending: { kind: 'draw', amount: 2 } }
     });
-    expect(fail(drawChain, 0, play(['4S', '4C', '4D']))).toMatch(/robo pendiente/);
+    expect(fail(drawChain, 0, play(['4S', '4C', '4D']))).toBe('rule.drawGroupOnly');
   });
 
   it('un grupo de J o de A pide una sola demanda', () => {
     const j = mk({ top: '7H', hands: { 0: ['JH', 'JS', 'JD', '9C'] } });
-    expect(fail(j, 0, play(['JH', 'JS', 'JD']))).toMatch(/Elige/);
+    expect(fail(j, 0, play(['JH', 'JS', 'JD']))).toBe('rule.pickRank');
     const r = act(j, 0, play(['JH', 'JS', 'JD'], { demandRank: '8' }));
     expect(r.demand).toEqual({ kind: 'rank', rank: '8', by: 'p0', turnsLeft: 4 });
     const a = act(
@@ -1178,11 +1193,11 @@ describe('grupos del mismo número', () => {
 
   it('basta con que una carta encaje, pero esa va primera', () => {
     const s = mk({ top: '7H', hands: { 0: ['9S', '9D', '9H', '2C'] } });
-    expect(fail(s, 0, play(['9S', '9D', '9H']))).toMatch(/Pon primero/);
+    expect(fail(s, 0, play(['9S', '9D', '9H']))).toBe('rule.firstFirst');
     const r = act(s, 0, play(['9H', '9S', '9D']));
     expect(top(r)).toBe('9D');
-    expect(fail(mk({ top: '7H', hands: { 0: ['9S', '9D', '9C', '2C'] } }), 0, play(['9S', '9D', '9C']))).toMatch(
-      /no encaja/
+    expect(fail(mk({ top: '7H', hands: { 0: ['9S', '9D', '9C', '2C'] } }), 0, play(['9S', '9D', '9C']))).toBe(
+      'rule.firstMustPlay'
     );
   });
 
@@ -1198,12 +1213,12 @@ describe('grupos del mismo número', () => {
     expect(under.freePlay).toBe(false);
     expect(under.demand?.turnsLeft).toBe(3);
     expect(
-      fail(mk({ top: '7H', hands: { 0: ['QS', 'QD', 'QC', '9C'] }, patch: demand }), 0, play(['QD', 'QS', 'QC']))
+      failReason(mk({ top: '7H', hands: { 0: ['QS', 'QD', 'QC', '9C'] }, patch: demand }), 0, play(['QD', 'QS', 'QC']))
     ).toBeTruthy();
     const jDemand = { demand: { kind: 'rank', rank: '9', by: 'p3', turnsLeft: 4 } as const };
     expect(
-      fail(mk({ top: '7H', hands: { 0: ['QS', 'QD', 'QC', '9C'] }, patch: jDemand }), 0, play(['QS', 'QD', 'QC']))
-    ).toMatch(/Q bajo/);
+      failReason(mk({ top: '7H', hands: { 0: ['QS', 'QD', 'QC', '9C'] }, patch: jDemand }), 0, play(['QS', 'QD', 'QC']))
+    ).toBe('rule.noQUnderJ');
   });
 
   it('bajo demanda de J, vale un grupo del número exigido', () => {
@@ -1217,7 +1232,7 @@ describe('grupos del mismo número', () => {
   });
 
   it('dos cartas iguales no son jugada múltiple', () => {
-    expect(fail(mk({ top: '7H', hands: { 0: ['7S', '7D', '2C'] } }), 0, play(['7S', '7D']))).toMatch(/al menos 3/);
+    expect(fail(mk({ top: '7H', hands: { 0: ['7S', '7D', '2C'] } }), 0, play(['7S', '7D']))).toBe('rule.multiMin');
   });
 });
 
@@ -1236,7 +1251,7 @@ describe('un jugador abandona (removePlayer)', () => {
     expect(actor(r)).toBe('p2');
     expect(r.deck.length).toBe(s.deck.length + 3);
     expect(total(r)).toBe(total(s));
-    expect(r.log[r.log.length - 1]).toMatch(/abandona/);
+    expect(r.log[r.log.length - 1]).toEqual({ code: 'log.leave', params: { name: expect.any(String) } });
   });
 
   it('el último de la ronda: el turno pasa al primero', () => {

@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useRef } from 'react';
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 
 /** Confirmación modal accesible (Escape cancela, el foco empieza en "Cancelar"). */
 export function ConfirmDialog({ title, body, confirmLabel, onConfirm, onCancel }: Props) {
+  const t = useTranslations('common');
   const cancelRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     cancelRef.current?.focus();
@@ -39,7 +41,7 @@ export function ConfirmDialog({ title, body, confirmLabel, onConfirm, onCancel }
         </p>
         <div className='mt-6 flex gap-3'>
           <button ref={cancelRef} className='btn btn-ghost flex-1' onClick={onCancel}>
-            Cancelar
+            {t('cancel')}
           </button>
           <button className='btn btn-ruby flex-1' onClick={onConfirm}>
             {confirmLabel}

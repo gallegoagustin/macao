@@ -1,12 +1,16 @@
-import type { RoomView, Unchanged } from '../types';
+import { type Msg, type RoomView, type Unchanged, msg } from '../types';
 
+/** Error de la API: lleva un mensaje estable (`msg`) que la UI traduce, nunca texto del servidor. */
 export class ApiError extends Error {
   constructor(
     public status: number,
-    message: string,
-    public code?: string
+    public msg: Msg
   ) {
-    super(message);
+    super(msg.code);
+  }
+
+  get code(): string {
+    return this.msg.code;
   }
 }
 
@@ -23,10 +27,10 @@ async function request<T>(path: string, init: RequestInit & { token?: string } =
       }
     });
   } catch {
-    throw new ApiError(0, 'Sin conexión con el servidor. Reintentando…', 'network');
+    throw new ApiError(0, msg('error.network'));
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data.error ?? 'Algo ha salido mal.', data.code);
+  if (!res.ok) throw new ApiError(res.status, typeof data.code === 'string' ? (data as Msg) : msg('error.generic'));
   return data as T;
 }
 

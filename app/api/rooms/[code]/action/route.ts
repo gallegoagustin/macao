@@ -7,7 +7,7 @@ export function POST(req: Request, ctx: { params: Promise<{ code: string }> }) {
   return handle(async () => {
     const { code } = await ctx.params;
     const token = req.headers.get('x-player-token');
-    if (!token) throw new HttpError(401, 'No formas parte de esta sala.', 'not_member');
+    if (!token) throw new HttpError(401, 'error.notMember');
     const body = await readBody(req);
     return json(await gameAction(code, token, body));
   });

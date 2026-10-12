@@ -1,11 +1,14 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { type CardId, type Suit, RANKS, SUITS, SUIT_GLYPH, SUIT_NAME, isRedSuit, parseCard } from '@/lib/rules/cards';
+import { useMsg } from '@/lib/client/useMsg';
+import { type CardId, type Suit, RANKS, SUITS, SUIT_GLYPH, isRedSuit, parseCard } from '@/lib/rules/cards';
 import { type PolacoView, checkPlay, ctxFromView } from '@/lib/rules/polaco';
 import type { RoomView } from '@/lib/types';
 import { ConfirmDialog } from './ConfirmDialog';
-import { CardBack, PlayingCard, cardAriaLabel } from './PlayingCard';
+import { LocaleSwitcher } from './LocaleSwitcher';
+import { CardBack, PlayingCard, useCardAriaLabel } from './PlayingCard';
 
 interface Props {
   view: RoomView<PolacoView>;
@@ -21,9 +24,10 @@ type Chip = { key: string; node: React.ReactNode; tone?: 'warn' | 'info' };
 
 /** Palo dentro de un chip: color según el fondo del chip para que siempre contraste. */
 const Glyph = ({ suit, on }: { suit: Suit; on: 'brass' | 'ruby' }) => {
+  const tCard = useTranslations('card');
   const color = on === 'ruby' ? 'text-white' : isRedSuit(suit) ? 'text-ruby' : 'text-ink';
   return (
-    <span className={color} aria-label={SUIT_NAME[suit]}>
+    <span className={color} aria-label={tCard(`suit.${suit}`)}>
       {SUIT_GLYPH[suit]}
     </span>
   );
@@ -70,6 +74,12 @@ function useHandLayout(count: number) {
 }
 
 export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: Props) {
+  const t = useTranslations('table');
+  const tMeta = useTranslations('meta');
+  const turnTitle = tMeta('turnTitle');
+  const idleTitle = tMeta('title');
+  const renderMsg = useMsg();
+  const cardAriaLabel = useCardAriaLabel();
   const game = view.game as PolacoView;
   const me = view.me;
   const nameOf = useMemo(() => new Map(game.players.map((p) => [p.id, p.name])), [game.players]);
@@ -86,11 +96,11 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
   useEffect(() => {
     if (myTurn && !wasMyTurn.current) navigator.vibrate?.(35);
     wasMyTurn.current = myTurn;
-    document.title = myTurn ? '¡Tu turno! · Macao' : 'Macao';
+    document.title = myTurn ? turnTitle : idleTitle;
     return () => {
-      document.title = 'Macao';
+      document.title = idleTitle;
     };
-  }, [myTurn]);
+  }, [myTurn, turnTitle, idleTitle]);
 
   // Si cambia el contexto (p. ej. te han saltado), se cierra el selector.
   useEffect(() => {
@@ -132,7 +142,7 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
 
   function submit(cards: CardId[]) {
     const c = checkPlay(ctx, cards);
-    if (!c.ok) return notify(c.error);
+    if (!c.ok) return notify(renderMsg(c.error));
     setSelected([]);
     if (c.needsDemand) return setPicker({ cards, kind: c.needsDemand === 'rank' ? 'J' : 'A' });
     send({ type: 'play', cards });
@@ -140,7 +150,7 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
 
   function tapCard(card: CardId) {
     if (finished || busy) return;
-    if (!myTurn) return notify('Todavía no es tu turno.');
+    if (!myTurn) return notify(t('notYourTurnYet'));
     const now = Date.now();
     const prev = lastTap.current;
     lastTap.current = { card, at: now };
@@ -152,30 +162,24 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
     if (selected.includes(card)) return setSelected(selected.filter((c) => c !== card));
     const next = [...selected, card];
     const partial = checkPlay(ctx, next, { partial: true });
-    if (!partial.ok) return notify(partial.error);
+    if (!partial.ok) return notify(renderMsg(partial.error));
     setSelected(next);
   }
 
   /* ---- Estado de la mesa (chips) ---- */
   const chips: Chip[] = [];
   const p = game.pending;
-  if (p?.kind === 'draw') chips.push({ key: 'draw', node: <>+{p.amount} acumulado</>, tone: 'warn' });
-  if (p?.kind === 'skip') chips.push({ key: 'skip', node: <>Salta {p.count}</>, tone: 'warn' });
+  if (p?.kind === 'draw') chips.push({ key: 'draw', node: <>{t('chip.draw', { amount: p.amount })}</>, tone: 'warn' });
+  if (p?.kind === 'skip') chips.push({ key: 'skip', node: <>{t('chip.skip', { count: p.count })}</>, tone: 'warn' });
   if (p?.kind === 'king') {
     const suit = parseCard(p.card).suit;
     chips.push({
       key: 'king',
       tone: 'warn',
       node:
-        p.target === me ? (
-          <>
-            K<Glyph suit={suit} on='ruby' />: robas 5 o respondes
-          </>
-        ) : (
-          <>
-            K<Glyph suit={suit} on='ruby' /> contra {nameOf.get(p.target)}
-          </>
-        )
+        p.target === me
+          ? t.rich('chip.kingYou', { suit: () => <Glyph suit={suit} on='ruby' /> })
+          : t.rich('chip.kingOther', { suit: () => <Glyph suit={suit} on='ruby' />, name: nameOf.get(p.target) ?? '?' })
     });
   }
   const d = game.demand;
@@ -185,7 +189,7 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
       tone: 'info',
       node: (
         <>
-          Exige un {d.rank}
+          {t('chip.demandRank', { rank: d.rank })}
           <Left n={d.turnsLeft} />
         </>
       )
@@ -197,7 +201,7 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
       tone: 'info',
       node: (
         <>
-          Exige <Glyph suit={d.suit} on='brass' />
+          {t.rich('chip.demandSuit', { suit: () => <Glyph suit={d.suit} on='brass' /> })}
           <Left n={d.turnsLeft} />
         </>
       )
@@ -207,54 +211,58 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
     chips.push({
       key: 'q',
       tone: 'info',
-      node: myTurn ? <>Q: tiras lo que quieras</> : <>Q: {nameOf.get(game.actorId)} tira lo que quiera</>
+      node: myTurn ? <>{t('chip.freeYou')}</> : <>{t('chip.freeOther', { name: nameOf.get(game.actorId) ?? '?' })}</>
     });
   }
   if (game.drawn && myTurn) {
-    chips.push({ key: 'drawn', tone: 'info', node: <>Has robado una carta jugable: tírala o pasa</> });
+    chips.push({ key: 'drawn', tone: 'info', node: <>{t('chip.drawn')}</> });
   }
 
   const acceptLabel =
     p?.kind === 'draw'
-      ? `Aceptar: robas ${p.amount} y pierdes el turno`
+      ? t('accept.draw', { amount: p.amount })
       : p?.kind === 'skip'
         ? p.count > 1
-          ? `Aceptar: pierdes el turno (te quedan ${p.count - 1} salto${p.count - 1 === 1 ? '' : 's'} más en la cadena)`
-          : 'Aceptar: pierdes el turno'
+          ? t('accept.skipChain', { rest: p.count - 1 })
+          : t('accept.skip')
         : p?.kind === 'king'
-          ? 'Aceptar: robas 5'
-          : 'Aceptar';
+          ? t('accept.king')
+          : t('accept.plain');
 
+  const actorName = nameOf.get(game.actorId) ?? '?';
   const turnLine = finished
-    ? 'Partida terminada'
+    ? t('turn.finished')
     : myTurn
       ? p?.kind === 'king'
-        ? 'Tienes que responder a la K'
-        : 'Es tu turno'
+        ? t('turn.answerKing')
+        : t('turn.yours')
       : p?.kind === 'king'
-        ? `Esperando a ${nameOf.get(game.actorId)} (responde a la K)`
-        : `Turno de ${nameOf.get(game.actorId)}`;
+        ? t('turn.waitingKing', { name: actorName })
+        : t('turn.of', { name: actorName });
 
   return (
     <main className='mx-auto flex min-h-dvh w-full max-w-5xl flex-col'>
       {/* Cabecera */}
       <header className='flex items-center justify-between gap-2 px-4 pt-3 pb-1 text-sm text-cream/60'>
-        <span className='font-display tracking-[0.25em]'>{view.code}</span>
+        <div className='flex items-center gap-3'>
+          <span className='font-display tracking-[0.25em]'>{view.code}</span>
+          <LocaleSwitcher />
+        </div>
         <div className='flex items-center gap-2'>
           {isHost && !finished && (
             <button className='btn btn-ghost !min-h-10 !px-3 text-xs' onClick={() => setConfirm('end')}>
-              Finalizar partida
+              {t('endGame')}
             </button>
           )}
           <button className='btn btn-ghost !min-h-10 !px-3 text-xs' onClick={() => setConfirm('leave')}>
-            Salir
+            {t('leave')}
           </button>
         </div>
       </header>
 
       {/* Rivales + mesa, centrados juntos en el espacio libre */}
       <div className='flex flex-1 flex-col justify-center gap-5 py-3'>
-        <section aria-label='Rivales' className='flex flex-wrap justify-center gap-2 px-3'>
+        <section aria-label={t('opponents')} className='flex flex-wrap justify-center gap-2 px-3'>
           {opponents.map((o) => {
             const active = !finished && game.actorId === o.id;
             return (
@@ -270,23 +278,23 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
                     <CardBack className='absolute inset-0 rotate-6' />
                   </div>
                   <span className='font-display text-2xl leading-none font-black tabular-nums'>{o.cards}</span>
-                  <span className='sr-only'>cartas</span>
+                  <span className='sr-only'>{t('cardsWord')}</span>
                 </div>
                 {o.cards === 1 && <MacaoBadge />}
-                {active && <span className='text-[11px] font-semibold text-brass-soft'>pensando…</span>}
+                {active && <span className='text-[11px] font-semibold text-brass-soft'>{t('thinking')}</span>}
               </div>
             );
           })}
         </section>
 
         {/* Centro: mazo y descarte */}
-        <section className='flex flex-col items-center justify-center gap-4 px-4' aria-label='Mesa'>
+        <section className='flex flex-col items-center justify-center gap-4 px-4' aria-label={t('table')}>
           <div className='flex items-center gap-8'>
             <div className='flex flex-col items-center gap-2'>
               <button
                 onClick={() => send({ type: 'draw' })}
                 disabled={!game.legal.canDraw || busy}
-                aria-label='Robar una carta'
+                aria-label={t('drawOne')}
                 className={`relative w-[84px] rounded-lg transition-transform active:scale-95 sm:w-[104px] ${
                   game.legal.canDraw ? 'turn-pulse cursor-pointer' : 'opacity-80'
                 }`}>
@@ -295,7 +303,7 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
                 <CardBack className='relative' />
               </button>
               <span className='text-xs font-semibold text-cream/70'>
-                {game.legal.canDraw ? 'Robar' : `Mazo · ${game.deckCount}`}
+                {game.legal.canDraw ? t('draw') : t('deck', { count: game.deckCount })}
               </span>
             </div>
 
@@ -303,11 +311,11 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
               <div key={game.top} className='drop-in w-[84px] sm:w-[104px]'>
                 <PlayingCard id={game.top} />
               </div>
-              <span className='text-xs font-semibold text-cream/70'>Mesa</span>
+              <span className='text-xs font-semibold text-cream/70'>{t('tableLabel')}</span>
             </div>
           </div>
 
-          <ul className='flex min-h-9 flex-wrap justify-center gap-2' aria-label='Estado de la mesa'>
+          <ul className='flex min-h-9 flex-wrap justify-center gap-2' aria-label={t('status')}>
             {chips.map((c) => (
               <li
                 key={c.key}
@@ -325,13 +333,16 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
             role='log'
             aria-live='polite'
             className='w-full max-w-sm space-y-0.5 text-center text-[13px] leading-snug'>
-            {game.log.map((line, i) => (
-              <li
-                key={`${i}-${line}`}
-                className={i === game.log.length - 1 ? 'font-semibold text-cream' : 'text-cream/50'}>
-                {line}
-              </li>
-            ))}
+            {game.log.map((line, i) => {
+              const text = renderMsg(line);
+              return (
+                <li
+                  key={`${i}-${text}`}
+                  className={i === game.log.length - 1 ? 'font-semibold text-cream' : 'text-cream/50'}>
+                  {text}
+                </li>
+              );
+            })}
           </ol>
         </section>
       </div>
@@ -341,7 +352,7 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
         <div className='mb-2 flex items-center justify-between gap-3 px-1'>
           <p className='min-w-0 truncate text-sm' aria-live='polite'>
             <span className={`font-bold ${myTurn ? 'text-brass-soft' : 'text-cream/80'}`}>{turnLine}</span>
-            <span className='text-cream/50'> · {meSeat?.cards ?? 0} cartas</span>
+            <span className='text-cream/50'> · {t('cardsCount', { count: meSeat?.cards ?? 0 })}</span>
           </p>
           {meSeat?.cards === 1 && <MacaoBadge />}
         </div>
@@ -361,12 +372,12 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
                 className='btn btn-ghost w-full'
                 disabled={busy || !game.legal.canDraw}
                 onClick={() => send({ type: 'draw' })}>
-                Robar
+                {t('draw')}
               </button>
             )}
             {game.legal.canPass && (
               <button className='btn btn-ghost w-full' disabled={busy} onClick={() => send({ type: 'pass' })}>
-                Pasar
+                {t('pass')}
               </button>
             )}
           </div>
@@ -376,15 +387,15 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
           <div className='mb-1 flex flex-col gap-1.5'>
             <div className='flex gap-2'>
               <button className='btn btn-brass flex-1' disabled={busy || !check.ok} onClick={() => submit(selected)}>
-                {check.ok ? check.label : 'Tirar'}
+                {check.ok ? renderMsg(check.label) : t('play')}
               </button>
-              <button className='btn btn-ghost' onClick={() => setSelected([])} aria-label='Quitar la selección'>
-                Quitar
+              <button className='btn btn-ghost' onClick={() => setSelected([])} aria-label={t('clearSelection')}>
+                {t('clear')}
               </button>
             </div>
             {!check.ok && (
               <p role='status' className='px-1 text-[13px] leading-snug font-semibold text-[#ffb4a8]'>
-                {check.error}
+                {renderMsg(check.error)}
               </p>
             )}
           </div>
@@ -395,7 +406,7 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
           className='hand-scroll flex overflow-x-auto px-3 pt-11 pb-3'
           style={{ justifyContent: 'safe center' }}
           role='group'
-          aria-label='Tu mano'>
+          aria-label={t('yourHand')}>
           {sortedHand.map((card, i) => {
             const st = stateOf(card);
             const order = selected.indexOf(card) + 1;
@@ -411,7 +422,13 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
                 data-state={st}
                 data-overlap={i > 0 && hand.step < hand.cardW}
                 aria-pressed={st === 'selected'}
-                aria-label={`${cardAriaLabel(card)}${st === 'selected' ? `, seleccionada en posición ${order}` : st === 'playable' ? '' : myTurn ? ' (no jugable ahora)' : ''}`}
+                aria-label={
+                  st === 'selected'
+                    ? t('cardSelected', { card: cardAriaLabel(card), order })
+                    : st !== 'playable' && myTurn
+                      ? t('cardUnplayable', { card: cardAriaLabel(card) })
+                      : cardAriaLabel(card)
+                }
                 onClick={() => tapCard(card)}>
                 {order > 0 && (
                   <span
@@ -444,9 +461,9 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
 
       {confirm === 'leave' && (
         <ConfirmDialog
-          title='¿Salir de la partida?'
-          body='Tu mano volverá al mazo y los demás seguirán jugando sin ti.'
-          confirmLabel='Salir'
+          title={t('leaveTitle')}
+          body={t('leaveBody')}
+          confirmLabel={t('leaveConfirm')}
           onCancel={() => setConfirm(null)}
           onConfirm={() => {
             setConfirm(null);
@@ -456,9 +473,9 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
       )}
       {confirm === 'end' && (
         <ConfirmDialog
-          title='¿Finalizar la partida?'
-          body='Se acaba para todos y volvéis al lobby con los mismos jugadores.'
-          confirmLabel='Finalizar'
+          title={t('endTitle')}
+          body={t('endBody')}
+          confirmLabel={t('endConfirm')}
           onCancel={() => setConfirm(null)}
           onConfirm={() => {
             setConfirm(null);
@@ -474,25 +491,23 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
           aria-modal='true'
           aria-labelledby='winner-title'>
           <div className='rise w-full max-w-sm rounded-[28px] border border-brass/50 bg-felt-900 p-7 text-center shadow-2xl'>
-            <p className='text-sm font-semibold tracking-widest text-brass-soft uppercase'>Fin de la partida</p>
+            <p className='text-sm font-semibold tracking-widest text-brass-soft uppercase'>{t('gameOver')}</p>
             <h2 id='winner-title' className='font-display mt-2 text-4xl font-black text-brass-soft'>
-              {game.winnerId === me ? '¡Has ganado!' : `Gana ${nameOf.get(game.winnerId as string)}`}
+              {game.winnerId === me ? t('youWon') : t('winner', { name: nameOf.get(game.winnerId as string) ?? '?' })}
             </h2>
-            <p className='mt-2 text-cream/70'>
-              {game.winnerId === me ? 'Te has quedado sin cartas. Impecable.' : 'Se ha quedado sin cartas.'}
-            </p>
+            <p className='mt-2 text-cream/70'>{game.winnerId === me ? t('youWonBody') : t('winnerBody')}</p>
             <div className='mt-6'>
               {isHost ? (
                 <button className='btn btn-brass w-full text-lg' disabled={busy} onClick={onRematch}>
-                  Revancha
+                  {t('rematch')}
                 </button>
               ) : (
                 <p className='text-cream/70' role='status'>
-                  Esperando a que el anfitrión lance la revancha…
+                  {t('waitingRematch')}
                 </p>
               )}
               <button className='btn btn-ghost mt-3 w-full' onClick={onLeave}>
-                Salir de la sala
+                {t('leaveRoom')}
               </button>
             </div>
           </div>
@@ -504,15 +519,17 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
 
 /** Indicador automático (sin acción del jugador): aparece cuando a alguien le queda 1 carta. */
 function MacaoBadge() {
+  const t = useTranslations('table');
   return (
     <span className='rise shrink-0 rounded-full bg-brass px-2.5 py-0.5 text-[11px] font-extrabold tracking-wide text-[#2b1d04] uppercase shadow-[0_2px_0_var(--color-brass-deep)]'>
-      ¡Macao!
+      {t('macao')}
     </span>
   );
 }
 
 function Left({ n }: { n: number }) {
-  return <span className='ml-1 text-xs font-semibold opacity-70'>· {n === 1 ? '1 turno' : `${n} turnos`}</span>;
+  const t = useTranslations('table');
+  return <span className='ml-1 text-xs font-semibold opacity-70'>· {t('turnsLeft', { count: n })}</span>;
 }
 
 function DemandPicker({
@@ -526,6 +543,9 @@ function DemandPicker({
   onPickRank: (rank: '5' | '6' | '7' | '8' | '9' | '10' | null) => void;
   onPickSuit: (suit: Suit) => void;
 }) {
+  const t = useTranslations('table');
+  const tCommon = useTranslations('common');
+  const tCard = useTranslations('card');
   const firstRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     firstRef.current?.focus();
@@ -541,11 +561,11 @@ function DemandPicker({
       <div
         role='dialog'
         aria-modal='true'
-        aria-label={kind === 'J' ? 'Elige un número' : 'Elige un palo'}
+        aria-label={kind === 'J' ? t('pickRankAria') : t('pickSuitAria')}
         className='rise w-full max-w-md rounded-t-[28px] border-t border-brass/40 bg-felt-900 px-5 pt-5 pb-[max(env(safe-area-inset-bottom),20px)]'
         onClick={(e) => e.stopPropagation()}>
         <h2 className='font-display mb-4 text-center text-2xl font-black text-brass-soft'>
-          {kind === 'J' ? '¿Qué número exiges?' : '¿Qué palo exiges?'}
+          {kind === 'J' ? t('pickRankTitle') : t('pickSuitTitle')}
         </h2>
         {kind === 'J' ? (
           <>
@@ -561,7 +581,7 @@ function DemandPicker({
               ))}
             </div>
             <button className='btn btn-brass mt-3 w-full' onClick={() => onPickRank(null)}>
-              Nada (la J es una carta normal)
+              {t('pickNone')}
             </button>
           </>
         ) : (
@@ -577,13 +597,13 @@ function DemandPicker({
                   aria-hidden='true'>
                   {SUIT_GLYPH[s]}
                 </span>
-                <span>{SUIT_NAME[s]}</span>
+                <span>{tCard(`suit.${s}`)}</span>
               </button>
             ))}
           </div>
         )}
         <button className='btn mt-3 w-full text-cream/70' onClick={onCancel}>
-          Cancelar
+          {tCommon('cancel')}
         </button>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { DEFAULT_RULESET_ID, defaultConfig, getRuleSet, normalizeConfig } from '../rules';
 import { getStore } from '../store';
-import type { Room, RoomView } from '../types';
+import { type Msg, type Room, type RoomView, msg } from '../types';
 import { HttpError } from './http';
 import { secureRng } from './rng';
 
@@ -26,13 +26,13 @@ export function normalizeCode(raw: string): string {
 }
 
 export function cleanName(raw: unknown): string {
-  if (typeof raw !== 'string') throw new HttpError(400, 'Escribe tu apodo.');
+  if (typeof raw !== 'string') throw new HttpError(400, 'error.nickRequired');
   const name = raw
     .replace(/[\u0000-\u001f\u007f]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-  if (name.length < 1) throw new HttpError(400, 'Escribe tu apodo.');
-  if (name.length > 20) throw new HttpError(400, 'El apodo no puede pasar de 20 caracteres.');
+  if (name.length < 1) throw new HttpError(400, 'error.nickRequired');
+  if (name.length > 20) throw new HttpError(400, 'error.nickTooLong', { max: 20 });
   return name;
 }
 
@@ -44,7 +44,7 @@ function tokenMatches(a: string, b: string): boolean {
 
 export function authenticate(room: Room, token: string | null): Member {
   const me = token ? room.players.find((p) => tokenMatches(p.token, token)) : undefined;
-  if (!me) throw new HttpError(401, 'No formas parte de esta sala.', 'not_member');
+  if (!me) throw new HttpError(401, 'error.notMember');
   return me;
 }
 
@@ -52,7 +52,7 @@ export function authenticate(room: Room, token: string | null): Member {
 
 export function roomView(room: Room, playerId: string): RoomView {
   const rs = getRuleSet(room.ruleSetId);
-  if (!rs) throw new HttpError(500, 'Set de reglas desconocido.');
+  if (!rs) throw new HttpError(500, 'error.unknownRuleSet');
   return {
     code: room.code,
     version: room.version,
@@ -60,7 +60,7 @@ export function roomView(room: Room, playerId: string): RoomView {
     me: playerId,
     hostId: room.hostId,
     players: room.players.map((p) => ({ id: p.id, name: p.name, isHost: p.id === room.hostId })),
-    ruleSet: { id: rs.id, name: rs.name, description: rs.description, config: rs.config },
+    ruleSet: { id: rs.id, config: rs.config },
     config: room.config,
     game: room.game ? rs.getView(room.game, playerId) : null,
     notice: room.notice ?? null
@@ -71,14 +71,14 @@ export function roomView(room: Room, playerId: string): RoomView {
 
 export async function loadRoom(code: string): Promise<Room> {
   const room = await getStore().get(normalizeCode(code));
-  if (!room) throw new HttpError(404, 'No existe ninguna sala con ese código.', 'not_found');
+  if (!room) throw new HttpError(404, 'error.roomNotFound');
   return room;
 }
 
 /** Con token, una sala inexistente responde igual que un token inválido (401): no se pueden enumerar salas. */
 async function loadRoomForMember(code: string): Promise<Room> {
   const room = await getStore().get(normalizeCode(code));
-  if (!room) throw new HttpError(401, 'No formas parte de esta sala.', 'not_member');
+  if (!room) throw new HttpError(401, 'error.notMember');
   return room;
 }
 
@@ -112,7 +112,7 @@ export async function mutateRoom<T>(
     next.version = current.version + 1;
     if (await store.compareAndSet(c, current.version, next)) return result;
   }
-  throw new HttpError(409, 'La sala está muy ocupada. Inténtalo de nuevo.', 'conflict');
+  throw new HttpError(409, 'error.roomBusy');
 }
 
 /* -------------------------------- operaciones ----------------------------- */
@@ -121,7 +121,7 @@ export async function createRoom(rawName: unknown) {
   const name = cleanName(rawName);
   const store = getStore();
   const rs = getRuleSet(DEFAULT_RULESET_ID);
-  if (!rs) throw new HttpError(500, 'Falta el set de reglas por defecto.');
+  if (!rs) throw new HttpError(500, 'error.missingDefaultRuleSet');
   const playerId = newId();
   const token = newToken();
   for (let attempt = 0; attempt < 20; attempt++) {
@@ -139,7 +139,7 @@ export async function createRoom(rawName: unknown) {
     };
     if (await store.create(room)) return { code: room.code, playerId, token };
   }
-  throw new HttpError(503, 'No se ha podido crear la sala. Inténtalo de nuevo.');
+  throw new HttpError(503, 'error.createFailed');
 }
 
 export async function joinRoom(code: string, rawName: unknown) {
@@ -147,11 +147,11 @@ export async function joinRoom(code: string, rawName: unknown) {
   const playerId = newId();
   const token = newToken();
   await mutateRoom(code, null, (room) => {
-    if (room.players.length === 0) throw new HttpError(404, 'No existe ninguna sala con ese código.', 'not_found');
-    if (room.phase !== 'lobby') throw new HttpError(409, 'La partida ya ha empezado.', 'in_progress');
-    if (room.players.length >= MAX_PLAYERS) throw new HttpError(409, 'La sala está llena (máximo 8 jugadores).');
+    if (room.players.length === 0) throw new HttpError(404, 'error.roomNotFound');
+    if (room.phase !== 'lobby') throw new HttpError(409, 'error.gameInProgress');
+    if (room.players.length >= MAX_PLAYERS) throw new HttpError(409, 'error.roomFull', { max: MAX_PLAYERS });
     if (room.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
-      throw new HttpError(409, 'Ese apodo ya está en uso en la sala. Elige otro.', 'name_taken');
+      throw new HttpError(409, 'error.nameTaken');
     }
     room.players.push({ id: playerId, name, token });
     return { room, result: null };
@@ -160,18 +160,18 @@ export async function joinRoom(code: string, rawName: unknown) {
 }
 
 function requireHost(room: Room, me: Member | null): Member {
-  if (!me || me.id !== room.hostId) throw new HttpError(403, 'Solo el anfitrión puede hacer eso.');
+  if (!me || me.id !== room.hostId) throw new HttpError(403, 'error.hostOnly');
   return me;
 }
 
 export async function setConfig(code: string, token: string, body: Record<string, unknown>) {
   return mutateRoom(code, token, (room, me) => {
     requireHost(room, me);
-    if (room.phase !== 'lobby') throw new HttpError(409, 'La configuración solo se cambia en el lobby.');
+    if (room.phase !== 'lobby') throw new HttpError(409, 'error.configLobbyOnly');
     const rs = typeof body.ruleSetId === 'string' ? getRuleSet(body.ruleSetId) : null;
-    if (!rs) throw new HttpError(400, 'Set de reglas desconocido.');
+    if (!rs) throw new HttpError(400, 'error.unknownRuleSet');
     const norm = normalizeConfig(rs.config, body.config);
-    if (!norm.ok) throw new HttpError(400, norm.error);
+    if (!norm.ok) throw new HttpError(400, norm.error.code, norm.error.params);
     room.ruleSetId = rs.id;
     room.config = norm.config;
     return { room, result: (me as Member).id };
@@ -181,11 +181,11 @@ export async function setConfig(code: string, token: string, body: Record<string
 export async function kick(code: string, token: string, targetId: unknown) {
   return mutateRoom(code, token, (room, me) => {
     requireHost(room, me);
-    if (room.phase !== 'lobby') throw new HttpError(409, 'Solo puedes echar jugadores en el lobby.');
+    if (room.phase !== 'lobby') throw new HttpError(409, 'error.kickLobbyOnly');
     if (typeof targetId !== 'string' || !room.players.some((p) => p.id === targetId)) {
-      throw new HttpError(404, 'Ese jugador no está en la sala.');
+      throw new HttpError(404, 'error.playerNotInRoom');
     }
-    if (targetId === room.hostId) throw new HttpError(400, 'No puedes echarte a ti mismo.');
+    if (targetId === room.hostId) throw new HttpError(400, 'error.kickSelf');
     room.players = room.players.filter((p) => p.id !== targetId);
     return { room, result: (me as Member).id };
   }).then((me) => roomViewAfter(code, me));
@@ -194,11 +194,11 @@ export async function kick(code: string, token: string, targetId: unknown) {
 export async function startGame(code: string, token: string) {
   return mutateRoom(code, token, (room, me) => {
     requireHost(room, me);
-    if (room.phase === 'playing') throw new HttpError(409, 'La partida ya está en marcha.');
+    if (room.phase === 'playing') throw new HttpError(409, 'error.alreadyPlaying');
     const rs = getRuleSet(room.ruleSetId);
-    if (!rs) throw new HttpError(500, 'Set de reglas desconocido.');
+    if (!rs) throw new HttpError(500, 'error.unknownRuleSet');
     const problem = rs.validate?.(room.players.length, room.config) ?? null;
-    if (problem) throw new HttpError(400, problem);
+    if (problem) throw new HttpError(400, problem.code, problem.params);
     const players = room.players.map((p) => ({ id: p.id, name: p.name }));
     const prev = room.phase === 'finished' ? room.game : undefined;
     room.game = rs.createGame(players, room.config, secureRng(), prev ?? undefined);
@@ -210,13 +210,13 @@ export async function startGame(code: string, token: string) {
 
 export async function gameAction(code: string, token: string, rawAction: unknown) {
   return mutateRoom(code, token, (room, me) => {
-    if (room.phase !== 'playing' || !room.game) throw new HttpError(409, 'No hay ninguna partida en marcha.');
+    if (room.phase !== 'playing' || !room.game) throw new HttpError(409, 'error.noGame');
     const rs = getRuleSet(room.ruleSetId);
-    if (!rs) throw new HttpError(500, 'Set de reglas desconocido.');
+    if (!rs) throw new HttpError(500, 'error.unknownRuleSet');
     const action = rs.parseAction(rawAction);
-    if (!action) throw new HttpError(400, 'Acción no válida.');
+    if (!action) throw new HttpError(400, 'error.invalidAction');
     const res = rs.applyAction(room.game, (me as Member).id, action, secureRng());
-    if (!res.ok) throw new HttpError(400, res.error, 'illegal_action');
+    if (!res.ok) throw new HttpError(400, res.error.code, res.error.params);
     room.game = res.state;
     if (rs.getStatus(res.state).finished) room.phase = 'finished';
     return { room, result: (me as Member).id };
@@ -227,7 +227,7 @@ async function roomViewAfter(code: string, playerId: string): Promise<RoomView> 
   return roomView(await loadRoom(code), playerId);
 }
 
-function backToLobby(room: Room, notice: string): void {
+function backToLobby(room: Room, notice: Msg): void {
   room.phase = 'lobby';
   room.game = null;
   room.notice = notice;
@@ -262,27 +262,27 @@ export async function leaveRoom(code: string, token: string): Promise<{ left: tr
 
     if (room.phase === 'playing' && room.game) {
       if (room.players.length < 2) {
-        backToLobby(room, `${me.name} se ha ido y no quedan jugadores suficientes: la partida se ha cancelado.`);
+        backToLobby(room, msg('notice.matchCancelled', { name: me.name }));
       } else {
         const rs = getRuleSet(room.ruleSetId);
-        if (!rs) throw new HttpError(500, 'Set de reglas desconocido.');
+        if (!rs) throw new HttpError(500, 'error.unknownRuleSet');
         room.game = rs.removePlayer(room.game, me.id, secureRng());
       }
     } else if (room.phase === 'finished' && room.players.length < 2) {
-      backToLobby(room, `${me.name} se ha ido y no quedan jugadores suficientes.`);
+      backToLobby(room, msg('notice.notEnoughPlayers', { name: me.name }));
     }
 
     if (await store.compareAndSet(c, current.version, room)) return { left: true };
   }
-  throw new HttpError(409, 'La sala está muy ocupada. Inténtalo de nuevo.', 'conflict');
+  throw new HttpError(409, 'error.roomBusy');
 }
 
 /** El host finaliza la partida para todos: vuelve al lobby con los mismos jugadores y configuración. */
 export async function endGame(code: string, token: string) {
   return mutateRoom(code, token, (room, me) => {
     requireHost(room, me);
-    if (room.phase === 'lobby') throw new HttpError(409, 'No hay ninguna partida en marcha.');
-    backToLobby(room, 'El anfitrión ha finalizado la partida.');
+    if (room.phase === 'lobby') throw new HttpError(409, 'error.noGame');
+    backToLobby(room, msg('notice.hostEnded'));
     return { room, result: (me as Member).id };
   }).then((me) => roomViewAfter(code, me));
 }

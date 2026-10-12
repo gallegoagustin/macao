@@ -1,4 +1,4 @@
-import type { ConfigField, RuleSet } from '../types';
+import { type ConfigField, type Msg, type RuleSet, msg } from '../types';
 import { polaco } from './polaco';
 
 /**
@@ -17,10 +17,6 @@ export function getRuleSet(id: string): AnyRuleSet | null {
   return Object.hasOwn(registry, id) ? registry[id] : null;
 }
 
-export function listRuleSets(): { id: string; name: string; description: string }[] {
-  return Object.values(registry).map(({ id, name, description }) => ({ id, name, description }));
-}
-
 export function defaultConfig(fields: ConfigField[]): Record<string, number> {
   return Object.fromEntries(fields.map((f) => [f.key, f.default]));
 }
@@ -29,13 +25,16 @@ export function defaultConfig(fields: ConfigField[]): Record<string, number> {
 export function normalizeConfig(
   fields: ConfigField[],
   raw: unknown
-): { ok: true; config: Record<string, number> } | { ok: false; error: string } {
+): { ok: true; config: Record<string, number> } | { ok: false; error: Msg } {
   const input = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const config: Record<string, number> = {};
   for (const f of fields) {
     const v = input[f.key] ?? f.default;
     if (typeof v !== 'number' || !Number.isInteger(v) || v < f.min || v > f.max) {
-      return { ok: false, error: `${f.label}: debe ser un número entero entre ${f.min} y ${f.max}.` };
+      return {
+        ok: false,
+        error: msg('error.configOutOfRange', { field: msg(`field.${f.key}`), min: f.min, max: f.max })
+      };
     }
     config[f.key] = v;
   }

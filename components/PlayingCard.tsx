@@ -1,10 +1,13 @@
-import { type CardId, type Suit, SUIT_NAME, isRedSuit, parseCard } from '@/lib/rules/cards';
+import { useTranslations } from 'next-intl';
+import { type CardId, type Suit, isRedSuit, parseCard } from '@/lib/rules/cards';
 
-const RANK_NAME: Record<string, string> = { A: 'As', J: 'Jota', Q: 'Reina', K: 'Rey' };
-
-export function cardAriaLabel(id: CardId): string {
-  const { rank, suit } = parseCard(id);
-  return `${RANK_NAME[rank] ?? rank} de ${SUIT_NAME[suit]}`;
+/** Nombre hablado de una carta ("As de corazones" / "Ace of hearts"), válido en Server y Client Components. */
+export function useCardAriaLabel(): (id: CardId) => string {
+  const t = useTranslations('card');
+  return (id) => {
+    const { rank, suit } = parseCard(id);
+    return t('aria', { rank: t(`rank.${rank}`), suit: t(`suit.${suit}`) });
+  };
 }
 
 /** Símbolo de palo dibujado con SVG (viewBox 24x24), centrado en (x, y) con tamaño `size`. */
@@ -124,6 +127,7 @@ const PIP_X = [34, 50, 66];
 const pipY = (row: number) => 36 + row * 11.5;
 
 export function PlayingCard({ id, className = '' }: { id: CardId; className?: string }) {
+  const cardAriaLabel = useCardAriaLabel();
   const { rank, suit } = parseCard(id);
   const red = isRedSuit(suit);
   const pips = PIPS[rank];

@@ -1,5 +1,13 @@
-import type { ActionResult, ConfigField, PlayerRef, RuleSet } from '../types';
-import { type CardId, type Rank, type Suit, SUIT_GLYPH, cardLabel, isCardId, makeDeck, parseCard } from './cards';
+import {
+  type ActionResult,
+  type ConfigField,
+  type Msg,
+  type MsgParam,
+  type PlayerRef,
+  type RuleSet,
+  msg
+} from '../types';
+import { type CardId, type Rank, type Suit, isCardId, makeDeck, parseCard } from './cards';
 
 /* -------------------------------------------------------------------------- */
 /* Tipos                                                                       */
@@ -40,7 +48,8 @@ export interface PolacoState {
   /** Carta robada este turno que se puede jugar (o pasar). */
   drawn: CardId | null;
   winner: string | null;
-  log: string[];
+  /** Entradas del registro de la mesa: mensajes estables que traduce el cliente. */
+  log: Msg[];
 }
 
 export interface PolacoView {
@@ -62,7 +71,7 @@ export interface PolacoView {
     canAccept: boolean;
   };
   winnerId: string | null;
-  log: string[];
+  log: Msg[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -72,8 +81,6 @@ export interface PolacoView {
 const CONFIG: ConfigField[] = [
   {
     key: 'handSize',
-    label: 'Cartas por jugador',
-    help: 'Entre 3 y 10. Cartas por jugador × jugadores no puede pasar de 40.',
     min: 3,
     max: 10,
     default: 5,
@@ -145,8 +152,8 @@ function prevIdx(s: PolacoState, i: number): number {
 function topCard(s: PolacoState): CardId {
   return s.discard[s.discard.length - 1];
 }
-function log(s: PolacoState, msg: string): void {
-  s.log.push(msg);
+function log(s: PolacoState, entry: Msg): void {
+  s.log.push(entry);
   if (s.log.length > LOG_KEEP) s.log.splice(0, s.log.length - LOG_KEEP);
 }
 
@@ -271,25 +278,25 @@ function playableCards(s: PolacoState, playerId: string): CardId[] {
   return ctx.hand.filter((c) => isPlayableCtx(ctx, c));
 }
 
-function illegalReason(ctx: PlayCtx, card: CardId): string {
+function illegalReason(ctx: PlayCtx, card: CardId): Msg {
   const { rank } = parseCard(card);
   const p = ctx.pending;
   if (p?.kind === 'king') {
-    return `Solo puedes responder con ${cardLabel(oppositeKing(p.card))} o aceptar y robar 5.`;
+    return msg('rule.kingOnlyRespond', { card: oppositeKing(p.card) });
   }
-  if (p?.kind === 'skip') return 'Tienes un salto pendiente: tira un 4 o acepta perder el turno.';
-  if (p?.kind === 'draw') return 'Tienes un robo pendiente: responde con un 2 o un 3, o acepta y roba.';
-  if (ctx.drawn) return `Solo puedes jugar la carta que has robado (${cardLabel(ctx.drawn)}) o pasar.`;
+  if (p?.kind === 'skip') return msg('rule.skipPending');
+  if (p?.kind === 'draw') return msg('rule.drawPending');
+  if (ctx.drawn) return msg('rule.drawnOnly', { card: ctx.drawn });
   const d = ctx.demand;
   if (d?.kind === 'rank') {
-    if (rank === 'Q') return 'No puedes tirar una Q bajo la demanda de una J.';
-    return `Te exigen un ${d.rank}: tira un ${d.rank} (de cualquier palo) u otra J.`;
+    if (rank === 'Q') return msg('rule.noQUnderJ');
+    return msg('rule.demandRank', { rank: d.rank });
   }
   if (d?.kind === 'suit') {
-    if (rank === 'Q') return `Bajo la demanda de una A, la única Q válida es la de ${SUIT_GLYPH[d.suit]}.`;
-    return `Te exigen ${SUIT_GLYPH[d.suit]}: tira una carta de ese palo u otra A.`;
+    if (rank === 'Q') return msg('rule.qUnderAce', { suit: d.suit });
+    return msg('rule.demandSuit', { suit: d.suit });
   }
-  return `Esa carta no encaja con ${cardLabel(ctx.top)}: tiene que coincidir en palo o número.`;
+  return msg('rule.noFit', { card: ctx.top });
 }
 
 /* ---- Jugadas de varias cartas ---- */
@@ -305,9 +312,9 @@ export type PlayCheck =
       /** Demanda que hay que elegir antes de tirar (null si no hace falta, p. ej. si ganas con esta jugada). */
       needsDemand: 'rank' | 'suit' | null;
       /** Texto del botón: "Tirar", "Tirar escalera (3)", "Tirar trío (3)"... */
-      label: string;
+      label: Msg;
     }
-  | { ok: false; error: string };
+  | { ok: false; error: Msg };
 
 const RANK_VALUE: Record<Rank, number> = {
   A: 1,
@@ -343,12 +350,12 @@ function isStraightRanks(ranks: Rank[]): boolean {
  */
 export function checkPlay(ctx: PlayCtx, cards: CardId[], opts: { partial?: boolean } = {}): PlayCheck {
   const partial = opts.partial === true;
-  const fail = (error: string): PlayCheck => ({ ok: false, error });
-  if (ctx.finished) return fail('La partida ha terminado.');
-  if (!ctx.isActor) return fail('No es tu turno.');
-  if (cards.length === 0) return fail('Elige al menos una carta.');
-  if (new Set(cards).size !== cards.length) return fail('No puedes repetir una carta.');
-  for (const c of cards) if (!ctx.hand.includes(c)) return fail('No tienes esa carta.');
+  const fail = (error: Msg): PlayCheck => ({ ok: false, error });
+  if (ctx.finished) return fail(msg('rule.gameOver'));
+  if (!ctx.isActor) return fail(msg('rule.notYourTurn'));
+  if (cards.length === 0) return fail(msg('rule.pickOne'));
+  if (new Set(cards).size !== cards.length) return fail(msg('rule.noRepeat'));
+  for (const c of cards) if (!ctx.hand.includes(c)) return fail(msg('rule.notInHand'));
 
   const first = cards[0];
   const last = cards[cards.length - 1];
@@ -358,45 +365,43 @@ export function checkPlay(ctx: PlayCtx, cards: CardId[], opts: { partial?: boole
 
   if (cards.length === 1) {
     if (!isPlayableCtx(ctx, first)) return fail(illegalReason(ctx, first));
-    return { ok: true, kind: 'single', last, needsDemand, label: 'Tirar' };
+    return { ok: true, kind: 'single', last, needsDemand, label: msg('play.single') };
   }
 
   // ---- varias cartas ----
   const p = ctx.pending;
-  if (p?.kind === 'king') return fail('Una K pendiente solo se responde con la K opuesta (una carta) o aceptando.');
-  if (ctx.drawn) return fail(`Solo puedes jugar la carta que has robado (${cardLabel(ctx.drawn)}) o pasar.`);
+  if (p?.kind === 'king') return fail(msg('rule.kingMulti'));
+  if (ctx.drawn) return fail(msg('rule.drawnOnly', { card: ctx.drawn }));
 
   const ranks = cards.map((c) => parseCard(c).rank);
   const group = ranks.every((r) => r === ranks[0]);
   if (!group && !isStraightRanks(ranks)) {
-    return fail('Varias cartas deben formar una escalera (números consecutivos) o un grupo del mismo número.');
+    return fail(msg('rule.multiShape'));
   }
   if (!partial && cards.length < 3) {
-    return fail('Para tirar varias cartas hacen falta al menos 3 (escalera o grupo del mismo número).');
+    return fail(msg('rule.multiMin'));
   }
 
   if (p?.kind === 'draw' && !(group && (ranks[0] === '2' || ranks[0] === '3'))) {
-    return fail('Con un robo pendiente solo responde un grupo de 2 o de 3 (o aceptar).');
+    return fail(msg('rule.drawGroupOnly'));
   }
   if (p?.kind === 'skip' && !(group && ranks[0] === '4')) {
-    return fail('Con un salto pendiente solo responde un grupo de 4 (o aceptar).');
+    return fail(msg('rule.skipGroupOnly'));
   }
 
   if (!isPlayableCtx(ctx, first)) {
     if (group && cards.some((c) => isPlayableCtx(ctx, c))) {
-      return fail('Pon primero la carta que encaja con la mesa.');
+      return fail(msg('rule.firstFirst'));
     }
     return fail(
-      group || !partial
-        ? `La primera carta debe poder tirarse sola. ${illegalReason(ctx, first)}`
-        : illegalReason(ctx, first)
+      group || !partial ? msg('rule.firstMustPlay', { reason: illegalReason(ctx, first) }) : illegalReason(ctx, first)
     );
   }
 
   const kind: PlayKind = group ? 'group' : 'straight';
   const label = group
-    ? `Tirar ${cards.length === 3 ? 'trío' : 'grupo'} (${cards.length})`
-    : `Tirar escalera (${cards.length})`;
+    ? msg(cards.length === 3 ? 'play.trio' : 'play.group', { count: cards.length })
+    : msg('play.straight', { count: cards.length });
   return { ok: true, kind, last, needsDemand: partial ? null : needsDemand, label };
 }
 
@@ -425,19 +430,22 @@ function canPassNow(s: PolacoState, playerId: string): boolean {
 /* Acciones                                                                    */
 /* -------------------------------------------------------------------------- */
 
-const err = (error: string): ActionResult<PolacoState> => ({ ok: false, error });
+const err = (code: string, params?: Record<string, MsgParam>): ActionResult<PolacoState> => ({
+  ok: false,
+  error: msg(code, params)
+});
 
 function applyAction(state: PolacoState, playerId: string, action: PolacoAction, rng: Rng): ActionResult<PolacoState> {
-  if (state.winner) return err('La partida ha terminado.');
+  if (state.winner) return err('rule.gameOver');
   const s = clone(state);
   const pi = idxOf(s, playerId);
-  if (pi < 0) return err('No estás en esta partida.');
+  if (pi < 0) return err('rule.notInGame');
 
   if (pi !== s.turn) {
     if (s.pending?.kind === 'king') {
-      return err(`Esperando a que ${nameOf(s, s.pending.target)} responda a la K.`);
+      return err('rule.waitingKing', { name: nameOf(s, s.pending.target) });
     }
-    return err('No es tu turno.');
+    return err('rule.notYourTurn');
   }
 
   switch (action.type) {
@@ -450,15 +458,14 @@ function applyAction(state: PolacoState, playerId: string, action: PolacoAction,
     case 'accept':
       return accept(s, pi, rng);
     default:
-      return err('Acción no válida.');
+      return err('error.invalidAction');
   }
 }
 
-function describePlay(kind: PlayKind, cards: CardId[]): string {
-  const labels = cards.map(cardLabel).join(' ');
-  if (kind === 'straight') return `escalera ${labels}`;
-  if (kind === 'group') return `${cards.length} cartas iguales ${labels}`;
-  return labels;
+function describePlay(kind: PlayKind, cards: CardId[]): Msg {
+  if (kind === 'straight') return msg('what.straight', { cards });
+  if (kind === 'group') return msg('what.group', { count: cards.length, cards });
+  return msg('what.single', { cards });
 }
 
 function play(
@@ -473,7 +480,7 @@ function play(
   const hand = s.hands[pid];
 
   const check = checkPlay(ctxFromState(s, pid), cards);
-  if (!check.ok) return err(check.error);
+  if (!check.ok) return { ok: false, error: check.error };
 
   const wasKingPending = s.pending?.kind === 'king';
   const last = check.last;
@@ -485,14 +492,14 @@ function play(
   let demandSuit: Suit | null = null;
   if (!wasKingPending && !willWin) {
     if (rank === 'J') {
-      if (action.demandRank === undefined) return err('Elige un número del 5 al 10 o «Nada».');
+      if (action.demandRank === undefined) return err('rule.pickRank');
       if (action.demandRank !== null) {
-        if (!DEMAND_RANKS.includes(action.demandRank)) return err('Solo puedes exigir un número del 5 al 10.');
+        if (!DEMAND_RANKS.includes(action.demandRank)) return err('rule.rankRange');
         demandRank = action.demandRank;
       }
     }
     if (rank === 'A') {
-      if (!action.demandSuit) return err('Elige el palo que quieres exigir.');
+      if (!action.demandSuit) return err('rule.pickSuit');
       demandSuit = action.demandSuit;
     }
   }
@@ -508,14 +515,14 @@ function play(
     s.winner = pid;
     s.pending = null;
     s.demand = null;
-    log(s, `${me} tiró ${what} y se queda sin cartas: ¡gana!`);
+    log(s, msg('log.win', { me, what }));
     return { ok: true, state: s };
   }
 
   /* ---- Respuesta a una K (siempre una sola carta) ---- */
   if (wasKingPending && s.pending?.kind === 'king') {
     const k = s.pending;
-    log(s, `${me} responde con ${cardLabel(last)}: ${nameOf(s, k.from)} roba 10`);
+    log(s, msg('log.kingResponded', { me, card: last, from: nameOf(s, k.from) }));
     resolveKing(s, 'respond', rng);
     return { ok: true, state: s };
   }
@@ -529,7 +536,7 @@ function play(
     case '4': {
       const count = (s.pending?.kind === 'skip' ? s.pending.count : 0) + mult;
       s.pending = { kind: 'skip', count };
-      log(s, `${me} tiró ${what}, salta ${count}`);
+      log(s, msg('log.skip', { me, what, count }));
       endTurn(s, pi, next);
       return { ok: true, state: s };
     }
@@ -538,7 +545,7 @@ function play(
       const add = (rank === '2' ? 2 : 3) * mult;
       const amount = (s.pending?.kind === 'draw' ? s.pending.amount : 0) + add;
       s.pending = { kind: 'draw', amount };
-      log(s, `${me} tiró ${what}, +${amount} acumulado`);
+      log(s, msg('log.drawStack', { me, what, amount }));
       endTurn(s, pi, next);
       return { ok: true, state: s };
     }
@@ -547,9 +554,9 @@ function play(
       endTurn(s, pi, next);
       if (demandRank) {
         s.demand = { kind: 'rank', rank: demandRank, by: pid, turnsLeft: n };
-        log(s, `${me} tiró ${what} y exige un ${demandRank}`);
+        log(s, msg('log.demandRank', { me, what, rank: demandRank }));
       } else {
-        log(s, `${me} tiró ${what} sin exigir nada`);
+        log(s, msg('log.noDemand', { me, what }));
       }
       return { ok: true, state: s };
     }
@@ -557,7 +564,7 @@ function play(
       s.demand = null;
       endTurn(s, pi, next);
       s.demand = { kind: 'suit', suit: demandSuit as Suit, by: pid, turnsLeft: n };
-      log(s, `${me} tiró ${what} y exige ${SUIT_GLYPH[demandSuit as Suit]}`);
+      log(s, msg('log.demandSuit', { me, what, suit: demandSuit as Suit }));
       return { ok: true, state: s };
     }
     case 'Q': {
@@ -566,10 +573,10 @@ function play(
       const underDemand = s.demand !== null;
       endTurn(s, pi, next);
       if (underDemand) {
-        log(s, `${me} tiró ${what}`);
+        log(s, msg('log.played', { me, what }));
       } else {
         s.freePlay = true;
-        log(s, `${me} tiró ${what}: ${nameOf(s, s.players[next].id)} tira lo que quiera`);
+        log(s, msg('log.queenFree', { me, what, next: nameOf(s, s.players[next].id) }));
       }
       return { ok: true, state: s };
     }
@@ -579,7 +586,7 @@ function play(
         const target = s.players[targetIdx].id;
         s.pending = { kind: 'king', from: pid, target, card: last };
         s.turn = targetIdx;
-        log(s, `${me} tiró ${what} contra ${nameOf(s, target)}: roba 5 o responde`);
+        log(s, msg('log.king', { me, what, target: nameOf(s, target) }));
         return { ok: true, state: s };
       }
       break; // K♣ y K♦ son cartas normales
@@ -588,7 +595,7 @@ function play(
       break;
   }
 
-  log(s, `${me} tiró ${what}`);
+  log(s, msg('log.played', { me, what }));
   endTurn(s, pi, next);
   return { ok: true, state: s };
 }
@@ -635,16 +642,16 @@ function resolveKing(s: PolacoState, how: 'accept' | 'respond', rng: Rng): void 
 function draw(s: PolacoState, pi: number, rng: Rng): ActionResult<PolacoState> {
   const pid = s.players[pi].id;
   const me = s.players[pi].name;
-  if (s.pending) return err('Tienes algo pendiente: acepta para robar.');
-  if (s.drawn) return err('Ya has robado en este turno: juega esa carta o pasa.');
-  if (drawableCount(s) === 0) return err('No quedan cartas para robar.');
+  if (s.pending) return err('rule.drawPendingAccept');
+  if (s.drawn) return err('rule.alreadyDrew');
+  if (drawableCount(s) === 0) return err('rule.deckEmpty');
 
   const [card] = drawCards(s, pid, 1, rng);
   if (isPlayable(s, card)) {
     s.drawn = card;
-    log(s, `${me} roba una carta`);
+    log(s, msg('log.draw', { me }));
   } else {
-    log(s, `${me} roba una carta y pasa`);
+    log(s, msg('log.drawPass', { me }));
     endTurn(s, pi, nextIdx(s, pi));
   }
   return { ok: true, state: s };
@@ -652,8 +659,8 @@ function draw(s: PolacoState, pi: number, rng: Rng): ActionResult<PolacoState> {
 
 function pass(s: PolacoState, pi: number): ActionResult<PolacoState> {
   const pid = s.players[pi].id;
-  if (!canPassNow(s, pid)) return err('Solo puedes pasar después de robar una carta jugable.');
-  log(s, `${s.players[pi].name} pasa`);
+  if (!canPassNow(s, pid)) return err('rule.passOnly');
+  log(s, msg('log.pass', { me: s.players[pi].name }));
   endTurn(s, pi, nextIdx(s, pi));
   return { ok: true, state: s };
 }
@@ -662,11 +669,11 @@ function accept(s: PolacoState, pi: number, rng: Rng): ActionResult<PolacoState>
   const pid = s.players[pi].id;
   const me = s.players[pi].name;
   const p = s.pending;
-  if (!p) return err('No hay nada que aceptar.');
+  if (!p) return err('rule.nothingToAccept');
 
   if (p.kind === 'skip') {
     p.count -= 1;
-    log(s, `${me} acepta el salto y pierde el turno`);
+    log(s, msg('log.acceptSkip', { me }));
     if (p.count <= 0) s.pending = null;
     endTurn(s, pi, nextIdx(s, pi));
     return { ok: true, state: s };
@@ -674,11 +681,11 @@ function accept(s: PolacoState, pi: number, rng: Rng): ActionResult<PolacoState>
   if (p.kind === 'draw') {
     s.pending = null;
     drawCards(s, pid, p.amount, rng);
-    log(s, `${me} acepta y roba ${p.amount}, pierde el turno`);
+    log(s, msg('log.acceptDraw', { me, amount: p.amount }));
     endTurn(s, pi, nextIdx(s, pi));
     return { ok: true, state: s };
   }
-  log(s, `${me} acepta la K y roba 5`);
+  log(s, msg('log.acceptKing', { me }));
   resolveKing(s, 'accept', rng);
   return { ok: true, state: s };
 }
@@ -723,7 +730,7 @@ function removePlayer(state: PolacoState, playerId: string, rng: Rng): PolacoSta
   if (wasActor) s.drawn = null;
   s.starter = s.starter === i ? (i - 1 + n) % n : shift(s.starter);
   if (s.demand) s.demand.turnsLeft = Math.min(s.demand.turnsLeft, n);
-  log(s, `${name} abandona la partida`);
+  log(s, msg('log.leave', { name }));
   return s;
 }
 
@@ -774,7 +781,7 @@ function createGame(players: PlayerRef[], config: Record<string, number>, rng: R
     freePlay: false,
     drawn: null,
     winner: null,
-    log: [`Empieza ${players[starter].name}`]
+    log: [msg('log.start', { name: players[starter].name })]
   };
 }
 
@@ -842,21 +849,18 @@ function parseAction(raw: unknown): PolacoAction | null {
   }
 }
 
-function validate(playerCount: number, config: Record<string, number>): string | null {
-  if (playerCount < MIN_PLAYERS) return 'Hacen falta al menos 2 jugadores.';
-  if (playerCount > MAX_PLAYERS) return 'Máximo 8 jugadores.';
+function validate(playerCount: number, config: Record<string, number>): Msg | null {
+  if (playerCount < MIN_PLAYERS) return msg('validate.minPlayers', { min: MIN_PLAYERS });
+  if (playerCount > MAX_PLAYERS) return msg('validate.maxPlayers', { max: MAX_PLAYERS });
   const handSize = config.handSize ?? CONFIG[0].default;
   if (handSize * playerCount > MAX_DEALT) {
-    return `Con ${playerCount} jugadores el máximo es ${Math.floor(MAX_DEALT / playerCount)} cartas por jugador.`;
+    return msg('validate.maxPerPlayer', { players: playerCount, max: Math.floor(MAX_DEALT / playerCount) });
   }
   return null;
 }
 
 export const polaco: RuleSet<PolacoState, PolacoAction, PolacoView> = {
   id: 'polaco',
-  name: 'Polaco',
-  description:
-    'Baraja francesa de 52 cartas. 2 y 3 acumulan robo, 4 acumula salto, J exige un número, A exige un palo, Q es comodín, K♥ y K♠ atacan. Puedes tirar escaleras y grupos de 3 o más cartas. Quien se queda con 1 carta lo anuncia con un ¡Macao! automático.',
   config: CONFIG,
   validate,
   createGame,

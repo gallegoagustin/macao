@@ -9,7 +9,7 @@ Juego de cartas Macao multijugador para jugar entre amigos. Alguien crea una sal
 - Sin WebSockets: el cliente hace polling cada ~1 s.
 - Gestor de paquetes: **npm** (pnpm no está instalado en esta máquina).
 - Tests: vitest para el motor de reglas.
-- UI en castellano neutro con tuteo (sin voseo). Mobile-first.
+- UI en castellano neutro con tuteo (sin voseo) e inglés, con `next-intl` sin prefijo en la URL (cookie `NEXT_LOCALE` → `Accept-Language` → `es`). Textos en `messages/{es,en}.json`. Mobile-first.
 
 ## Arquitectura
 
@@ -68,7 +68,7 @@ interface RuleSet<S, A, V> {
 
 - Registro en `lib/rules/index.ts`. Añadir una variante es añadir un fichero, sin tocar ni la API ni la mesa más allá de lo que use la variante.
 - **Funciones puras y deterministas** (RNG inyectado) para poder testearlas.
-- Los mensajes de error se ven en la UI, así que van en castellano.
+- El servidor no emite texto: errores, avisos y registro de la mesa son `{ code, params? }` (tipo `Msg`) y el cliente los traduce con la clave `msg.<code>`. Un código nuevo exige añadir la clave en `es.json` y `en.json` (un test comprueba que tienen las mismas claves).
 
 ### Salir y finalizar
 

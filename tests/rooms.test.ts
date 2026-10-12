@@ -12,6 +12,7 @@ import {
   startGame
 } from '@/lib/server/rooms';
 import { HttpError } from '@/lib/server/http';
+import type { Msg } from '@/lib/types';
 
 async function status(p: Promise<unknown>): Promise<number> {
   try {
@@ -107,9 +108,9 @@ describe('salir y finalizar', () => {
     expect(r.phase).toBe('lobby');
     expect(r.game).toBeNull();
     expect(r.players).toHaveLength(1);
-    expect(r.notice).toMatch(/cancelado/);
-    const v = (await getRoomView(a.code, a.token, null)) as { notice: string | null };
-    expect(v.notice).toMatch(/Bian/);
+    expect(r.notice).toEqual({ code: 'notice.matchCancelled', params: { name: 'Bian' } });
+    const v = (await getRoomView(a.code, a.token, null)) as { notice: Msg | null };
+    expect(v.notice?.params).toMatchObject({ name: 'Bian' });
   });
 
   it('si no queda nadie la sala se borra', async () => {
@@ -130,7 +131,7 @@ describe('salir y finalizar', () => {
     expect(r.game).toBeNull();
     expect(r.players).toHaveLength(3);
     expect(r.config).toEqual({ handSize: 4 });
-    expect(r.notice).toMatch(/finalizado/);
+    expect(r.notice).toEqual({ code: 'notice.hostEnded' });
     expect(await status(endGame(code, a.token))).toBe(409); // ya no hay partida
     await startGame(code, a.token); // se puede volver a empezar y limpia el aviso
     expect((await loadRoom(code)).notice).toBeNull();

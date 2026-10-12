@@ -35,7 +35,7 @@ Las salas caducan a las 24 h desde la última escritura. Las escrituras usan un 
 
 1. Crea `lib/rules/<nombre>.ts` y exporta un objeto que implemente `RuleSet<S, A, V>` (ver `lib/types.ts` y `lib/rules/polaco.ts` como referencia):
    - `createGame(players, config, rng, prev?)`, `applyAction(state, playerId, action)`, `getView(state, playerId)`: funciones puras, con el RNG inyectado (Polaco guarda la semilla dentro del estado).
-   - `config`: campos que la UI del anfitrión pinta en el lobby; `validate` para comprobaciones cruzadas.
+   - `config`: campos que la UI del anfitrión pinta en el lobby; `validate` para comprobaciones cruzadas. Los textos (nombre, descripción, etiquetas, errores y registro) no van en el set: devuelve `Msg` (`code` + `params`) y añade las claves en `messages/*.json` (`rules.<id>.*`, `msg.*`).
    - `parseAction` valida el JSON que llega por la API y `getStatus` indica si la partida terminó.
    - La vista (`V`) nunca debe incluir mazo ni manos ajenas.
 2. Regístralo en `lib/rules/index.ts`.

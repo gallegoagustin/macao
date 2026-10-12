@@ -1,0 +1,284 @@
+{
+  "meta": {
+    "title": "Macao",
+    "description": "Play Macao (Polish) with your friends: create a room and share the code.",
+    "roomTitle": "Room · Macao",
+    "turnTitle": "Your turn! · Macao"
+  },
+  "locale": {
+    "label": "Language",
+    "name": {
+      "es": "Español",
+      "en": "English"
+    }
+  },
+  "common": {
+    "cancel": "Cancel"
+  },
+  "home": {
+    "tagline": "Cards with friends. No accounts, no hassle.",
+    "nickLabel": "Your nickname",
+    "nickPlaceholder": "What should we call you at the table?",
+    "createPrompt": "Are you first? Open a room and send the code to your friends.",
+    "create": "Create room",
+    "creating": "Creating…",
+    "or": "or",
+    "codeLabel": "Room code",
+    "join": "Join",
+    "joining": "Joining…",
+    "nickRequired": "Enter your nickname to continue.",
+    "codeLength": "The code has 4 letters.",
+    "genericError": "Something went wrong."
+  },
+  "room": {
+    "kickedTitle": "You're no longer in this room",
+    "kickedBody": "The host removed you or your session has expired.",
+    "notFoundTitle": "This room doesn't exist",
+    "notFoundBody": "It may have expired (rooms last 24 hours) or the code may be different.",
+    "backHome": "Back to home",
+    "loading": "Loading…",
+    "entering": "Entering room {code}…",
+    "roomLabel": "Room",
+    "nickLabel": "Your nickname",
+    "nickPlaceholder": "What should we call you at the table?",
+    "nickRequired": "Enter your nickname to join.",
+    "joinRoom": "Join the room",
+    "joining": "Joining…",
+    "leaveFailed": "Couldn't leave the room.",
+    "genericError": "Something went wrong."
+  },
+  "lobby": {
+    "codeLabel": "Room code",
+    "codeAria": "Code {code}",
+    "copyCode": "Copy code",
+    "copied": "Copied!",
+    "copyFailed": "Couldn't copy. Select the code manually.",
+    "share": "Share",
+    "shareText": "Join my Macao room with the code {code}",
+    "players": "Players",
+    "you": "(you)",
+    "host": "Host",
+    "kick": "Remove {name}",
+    "needAnother": "You need at least one more player to start.",
+    "rules": "Rules",
+    "ruleSet": "Rule set",
+    "less": "Fewer {field}",
+    "more": "More {field}",
+    "capWarningHost": "With {players} players the maximum is {cap}: lower {field} to start.",
+    "capWarningGuest": "With {players} players the maximum is {cap}: the host needs to lower {field} to start.",
+    "start": "Start game",
+    "waitingHost": "Waiting for the host to start the game…",
+    "leave": "Leave room",
+    "leaveTitle": "Leave the room?",
+    "leaveBody": "You can come back with the code as long as the room exists.",
+    "leaveBodyHost": "The host role will pass to the next player.",
+    "leaveConfirm": "Leave"
+  },
+  "table": {
+    "notYourTurnYet": "It's not your turn yet.",
+    "chip": {
+      "draw": "+{amount} stacked",
+      "skip": "Skip {count}",
+      "kingYou": "K<suit></suit>: draw 5 or respond",
+      "kingOther": "K<suit></suit> against {name}",
+      "demandRank": "Demands {rank}s",
+      "demandSuit": "Demands <suit></suit>",
+      "freeYou": "Q: play anything you like",
+      "freeOther": "Q: {name} plays anything they like",
+      "drawn": "You drew a playable card: play it or pass"
+    },
+    "accept": {
+      "draw": "Accept: draw {amount} and lose your turn",
+      "skipChain": "Accept: lose your turn ({rest} more {rest, plural, one {skip} other {skips}} left in the chain)",
+      "skip": "Accept: lose your turn",
+      "king": "Accept: draw 5",
+      "plain": "Accept"
+    },
+    "turn": {
+      "finished": "Game over",
+      "answerKing": "You have to respond to the K",
+      "yours": "It's your turn",
+      "waitingKing": "Waiting for {name} (responding to the K)",
+      "of": "{name}'s turn"
+    },
+    "endGame": "End game",
+    "leave": "Leave",
+    "opponents": "Opponents",
+    "cardsWord": "cards",
+    "thinking": "thinking…",
+    "table": "Table",
+    "tableLabel": "Table",
+    "drawOne": "Draw a card",
+    "draw": "Draw",
+    "deck": "Deck · {count}",
+    "status": "Table status",
+    "cardsCount": "{count, plural, one {# card} other {# cards}}",
+    "pass": "Pass",
+    "play": "Play",
+    "clear": "Clear",
+    "clearSelection": "Clear the selection",
+    "yourHand": "Your hand",
+    "cardSelected": "{card}, selected at position {order}",
+    "cardUnplayable": "{card} (not playable right now)",
+    "leaveTitle": "Leave the game?",
+    "leaveBody": "Your hand goes back to the deck and the others keep playing without you.",
+    "leaveConfirm": "Leave",
+    "endTitle": "End the game?",
+    "endBody": "It ends for everyone and you all go back to the lobby with the same players.",
+    "endConfirm": "End game",
+    "gameOver": "Game over",
+    "youWon": "You won!",
+    "winner": "{name} wins",
+    "youWonBody": "You ran out of cards. Flawless.",
+    "winnerBody": "They ran out of cards.",
+    "rematch": "Rematch",
+    "waitingRematch": "Waiting for the host to start the rematch…",
+    "leaveRoom": "Leave room",
+    "macao": "Macao!",
+    "turnsLeft": "{count, plural, one {# turn} other {# turns}}",
+    "pickRankAria": "Pick a number",
+    "pickSuitAria": "Pick a suit",
+    "pickRankTitle": "Which number do you demand?",
+    "pickSuitTitle": "Which suit do you demand?",
+    "pickNone": "None (the J is a normal card)"
+  },
+  "card": {
+    "aria": "{rank} of {suit}",
+    "rank": {
+      "A": "Ace",
+      "2": "2",
+      "3": "3",
+      "4": "4",
+      "5": "5",
+      "6": "6",
+      "7": "7",
+      "8": "8",
+      "9": "9",
+      "10": "10",
+      "J": "Jack",
+      "Q": "Queen",
+      "K": "King"
+    },
+    "suit": {
+      "H": "hearts",
+      "S": "spades",
+      "D": "diamonds",
+      "C": "clubs"
+    }
+  },
+  "rules": {
+    "polaco": {
+      "name": "Polish",
+      "description": "52-card French deck. 2s and 3s stack draws, 4s stack skips, J demands a number, A demands a suit, Q is a wild card, K♥ and K♠ attack. You can play runs and groups of 3 or more cards. Whoever is left with 1 card announces it with an automatic Macao!",
+      "fields": {
+        "handSize": {
+          "help": "Between 3 and 10. Cards per player × players can't exceed 40."
+        }
+      }
+    }
+  },
+  "msg": {
+    "field": {
+      "handSize": "Cards per player"
+    },
+    "error": {
+      "nickRequired": "Enter your nickname.",
+      "nickTooLong": "The nickname can't be longer than {max} characters.",
+      "notMember": "You're not part of this room.",
+      "roomNotFound": "There's no room with that code.",
+      "roomBusy": "The room is too busy. Please try again.",
+      "gameInProgress": "The game has already started.",
+      "roomFull": "The room is full (maximum {max} players).",
+      "nameTaken": "That nickname is already taken in the room. Pick another one.",
+      "hostOnly": "Only the host can do that.",
+      "configLobbyOnly": "Settings can only be changed in the lobby.",
+      "unknownRuleSet": "Unknown rule set.",
+      "missingDefaultRuleSet": "The default rule set is missing.",
+      "configOutOfRange": "{field}: must be a whole number between {min} and {max}.",
+      "kickLobbyOnly": "You can only remove players in the lobby.",
+      "playerNotInRoom": "That player isn't in the room.",
+      "kickSelf": "You can't remove yourself.",
+      "alreadyPlaying": "The game is already under way.",
+      "noGame": "There's no game in progress.",
+      "invalidAction": "Invalid action.",
+      "createFailed": "Couldn't create the room. Please try again.",
+      "internal": "Internal server error.",
+      "network": "No connection to the server. Retrying…",
+      "generic": "Something went wrong."
+    },
+    "notice": {
+      "matchCancelled": "{name} has left and there aren't enough players: the game has been cancelled.",
+      "notEnoughPlayers": "{name} has left and there aren't enough players.",
+      "hostEnded": "The host has ended the game."
+    },
+    "validate": {
+      "minPlayers": "You need at least {min} players.",
+      "maxPlayers": "Maximum {max} players.",
+      "maxPerPlayer": "With {players} players the maximum is {max} cards per player."
+    },
+    "play": {
+      "single": "Play",
+      "trio": "Play trio ({count})",
+      "group": "Play group ({count})",
+      "straight": "Play run ({count})"
+    },
+    "what": {
+      "single": "{cards}",
+      "group": "{count} cards of the same rank {cards}",
+      "straight": "a run {cards}"
+    },
+    "rule": {
+      "kingOnlyRespond": "You can only respond with {card} or accept and draw 5.",
+      "skipPending": "You have a pending skip: play a 4 or accept losing your turn.",
+      "drawPending": "You have a pending draw: respond with a 2 or a 3, or accept and draw.",
+      "drawnOnly": "You can only play the card you drew ({card}) or pass.",
+      "noQUnderJ": "You can't play a Q under a J demand.",
+      "demandRank": "You're being asked for {rank}s: play any {rank} (of any suit) or another J.",
+      "qUnderAce": "Under an A demand, the only valid Q is the {suit} one.",
+      "demandSuit": "You're being asked for {suit}: play a card of that suit or another A.",
+      "noFit": "That card doesn't match {card}: it has to match the suit or the rank.",
+      "gameOver": "The game is over.",
+      "notYourTurn": "It's not your turn.",
+      "notInGame": "You're not in this game.",
+      "waitingKing": "Waiting for {name} to respond to the K.",
+      "pickOne": "Pick at least one card.",
+      "noRepeat": "You can't repeat a card.",
+      "notInHand": "You don't have that card.",
+      "kingMulti": "A pending K can only be answered with the opposite K (a single card) or by accepting.",
+      "multiShape": "Several cards must form a run (consecutive numbers) or a group of the same rank.",
+      "multiMin": "To play several cards you need at least 3 (a run or a group of the same rank).",
+      "drawGroupOnly": "With a pending draw only a group of 2s or 3s can respond (or accept).",
+      "skipGroupOnly": "With a pending skip only a group of 4s can respond (or accept).",
+      "firstFirst": "Put first the card that matches the table.",
+      "firstMustPlay": "The first card must be playable on its own. {reason}",
+      "pickRank": "Pick a number from 5 to 10 or \"None\".",
+      "rankRange": "You can only demand a number from 5 to 10.",
+      "pickSuit": "Pick the suit you want to demand.",
+      "drawPendingAccept": "You have something pending: accept to draw.",
+      "alreadyDrew": "You've already drawn this turn: play that card or pass.",
+      "deckEmpty": "There are no cards left to draw.",
+      "passOnly": "You can only pass after drawing a playable card.",
+      "nothingToAccept": "There's nothing to accept."
+    },
+    "log": {
+      "start": "{name} starts",
+      "win": "{me} played {what} and is out of cards: wins!",
+      "kingResponded": "{me} responds with {card}: {from} draws 10",
+      "skip": "{me} played {what}, skip {count}",
+      "drawStack": "{me} played {what}, +{amount} stacked",
+      "demandRank": "{me} played {what} and demands {rank}s",
+      "noDemand": "{me} played {what} without demanding anything",
+      "demandSuit": "{me} played {what} and demands {suit}",
+      "played": "{me} played {what}",
+      "queenFree": "{me} played {what}: {next} plays anything they like",
+      "king": "{me} played {what} against {target}: draw 5 or respond",
+      "draw": "{me} draws a card",
+      "drawPass": "{me} draws a card and passes",
+      "pass": "{me} passes",
+      "acceptSkip": "{me} accepts the skip and loses their turn",
+      "acceptDraw": "{me} accepts and draws {amount}, loses their turn",
+      "acceptKing": "{me} accepts the K and draws 5",
+      "leave": "{name} leaves the game"
+    }
+  }
+}
