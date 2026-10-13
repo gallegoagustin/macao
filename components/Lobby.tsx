@@ -55,7 +55,7 @@ export function Lobby({ view, busy, onConfig, onKick, onStart, onLeave, notify }
   }
 
   return (
-    <main className='mx-auto flex min-h-dvh w-full max-w-xl flex-col gap-6 px-5 py-8'>
+    <main className='safe-px-5 safe-pt-6 safe-pb-8 mx-auto flex min-h-dvh w-full max-w-xl flex-col gap-6'>
       <LocaleSwitcher className='self-end' />
       {view.notice && (
         <p

@@ -137,3 +137,28 @@ describe('salir y finalizar', () => {
     expect((await loadRoom(code)).notice).toBeNull();
   });
 });
+
+describe('cronómetro de partida', () => {
+  it('startedAt se fija al empezar, sale en la vista y se limpia al volver al lobby', async () => {
+    const a = await createRoom('Ana');
+    await joinRoom(a.code, 'Bian');
+    const lobby = (await getRoomView(a.code, a.token, null)) as { startedAt: number | null; finishedAt: number | null };
+    expect(lobby.startedAt).toBeNull();
+    expect(lobby.finishedAt).toBeNull();
+
+    const t0 = Date.now();
+    await startGame(a.code, a.token);
+    const playing = (await getRoomView(a.code, a.token, null)) as {
+      startedAt: number | null;
+      finishedAt: number | null;
+    };
+    expect(playing.startedAt).toBeGreaterThanOrEqual(t0);
+    expect(playing.startedAt).toBeLessThanOrEqual(Date.now());
+    expect(playing.finishedAt).toBeNull();
+
+    await endGame(a.code, a.token);
+    const back = await loadRoom(a.code);
+    expect(back.startedAt).toBeNull();
+    expect(back.finishedAt).toBeNull();
+  });
+});

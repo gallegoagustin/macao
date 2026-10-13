@@ -19,6 +19,18 @@
   --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Padding que nunca queda por debajo del área segura (muesca, barra de inicio, landscape). */
+@utility safe-px-* {
+  padding-left: max(calc(var(--spacing) * --value(integer)), env(safe-area-inset-left));
+  padding-right: max(calc(var(--spacing) * --value(integer)), env(safe-area-inset-right));
+}
+@utility safe-pt-* {
+  padding-top: max(calc(var(--spacing) * --value(integer)), env(safe-area-inset-top));
+}
+@utility safe-pb-* {
+  padding-bottom: max(calc(var(--spacing) * --value(integer)), env(safe-area-inset-bottom));
+}
+
 html {
   background: var(--color-felt-950);
   color-scheme: dark;
@@ -26,6 +38,7 @@ html {
 
 body {
   min-height: 100dvh;
+  overflow-x: clip; /* red de seguridad: nada puede provocar scroll horizontal de página */
   font-family: var(--font-sans);
   color: var(--color-cream);
   background: radial-gradient(

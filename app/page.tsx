@@ -1,13 +1,12 @@
 import { getTranslations } from 'next-intl/server';
 import { HomeForm } from '@/components/HomeForm';
-import { LocaleSwitcher } from '@/components/LocaleSwitcher';
 import { PlayingCard } from '@/components/PlayingCard';
+import { SettingsPanel } from '@/components/SettingsPanel';
 
 export default async function Home() {
   const t = await getTranslations('home');
   return (
-    <main className='mx-auto flex min-h-dvh max-w-3xl flex-col justify-center gap-10 px-5 py-10'>
-      <LocaleSwitcher className='absolute top-4 right-4' />
+    <main className='safe-px-5 safe-pt-10 safe-pb-10 mx-auto flex min-h-dvh w-full max-w-3xl flex-col justify-center gap-10 lg:max-w-4xl'>
       <header className='relative text-center'>
         <div className='pointer-events-none mx-auto mb-2 flex h-28 w-48 items-end justify-center' aria-hidden='true'>
           <div className='-mr-8 w-20 -rotate-[14deg] origin-bottom'>
@@ -25,7 +24,11 @@ export default async function Home() {
         </h1>
         <p className='mt-2 text-lg text-cream/75'>{t('tagline')}</p>
       </header>
-      <HomeForm />
+      {/* Móvil/tablet: una columna. Escritorio: Ajustes como columna lateral para que todo quepa sin scroll. */}
+      <div className='flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-12'>
+        <HomeForm />
+        <SettingsPanel />
+      </div>
     </main>
   );
 }

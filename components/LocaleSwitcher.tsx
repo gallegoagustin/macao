@@ -1,27 +1,16 @@
 'use client';
 
-import { useLocale, useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
-import { useTransition } from 'react';
-import { LOCALE_COOKIE, type Locale, locales } from '@/i18n/config';
-
-const ONE_YEAR = 60 * 60 * 24 * 365;
+import { useTranslations } from 'next-intl';
+import { locales } from '@/i18n/config';
+import { useLocaleChoice } from '@/lib/client/useLocaleChoice';
 
 /**
- * Selector ES / EN. Guarda la elección en la cookie y refresca los Server Components: el estado del
- * cliente (sala, sesión, selección de cartas) no se pierde porque no hay navegación.
+ * Selector ES / EN compacto para el lobby y las pantallas de paso. En Home vive dentro de Ajustes
+ * (`SettingsPanel`) y en la mesa no se muestra: el idioma se elige antes de empezar.
  */
 export function LocaleSwitcher({ className = '' }: { className?: string }) {
-  const locale = useLocale();
   const t = useTranslations('locale');
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-
-  function choose(next: Locale) {
-    if (next === locale) return;
-    document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=${ONE_YEAR}; samesite=lax`;
-    startTransition(() => router.refresh());
-  }
+  const { locale, choose, pending } = useLocaleChoice();
 
   return (
     <div
@@ -38,7 +27,7 @@ export function LocaleSwitcher({ className = '' }: { className?: string }) {
           aria-label={t(`name.${l}`)}
           disabled={pending}
           onClick={() => choose(l)}
-          className={`h-9 min-w-10 cursor-pointer rounded-full px-2.5 text-xs font-bold tracking-wide uppercase transition-colors ${
+          className={`h-11 min-w-11 cursor-pointer rounded-full px-3 text-xs font-bold tracking-wide uppercase transition-colors ${
             l === locale ? 'bg-brass text-[#2b1d04]' : 'text-cream/60 hover:text-cream'
           }`}>
           {l}

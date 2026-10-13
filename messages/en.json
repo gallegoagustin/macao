@@ -30,6 +30,16 @@
     "codeLength": "The code has 4 letters.",
     "genericError": "Something went wrong."
   },
+  "settings": {
+    "title": "Settings",
+    "handOrder": "Hand order",
+    "order": {
+      "suit": "By suit",
+      "asc": "Ascending",
+      "desc": "Descending"
+    },
+    "language": "Language"
+  },
   "room": {
     "kickedTitle": "You're no longer in this room",
     "kickedBody": "The host removed you or your session has expired.",
@@ -140,7 +150,9 @@
     "pickSuitAria": "Pick a suit",
     "pickRankTitle": "Which number do you demand?",
     "pickSuitTitle": "Which suit do you demand?",
-    "pickNone": "None (the J is a normal card)"
+    "pickNone": "None (the J is a normal card)",
+    "matchTime": "Match time",
+    "duration": "Duration: {time}"
   },
   "card": {
     "aria": "{rank} of {suit}",

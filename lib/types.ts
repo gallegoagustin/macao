@@ -68,6 +68,10 @@ export interface Room {
   game: unknown | null;
   /** Aviso para el lobby (partida finalizada o cancelada). Se borra al empezar otra. */
   notice: Msg | null;
+  /** Epoch ms del inicio de la partida en curso (o de la última terminada). Opcional: salas guardadas antes. */
+  startedAt?: number | null;
+  /** Epoch ms en que la partida terminó con un ganador; null mientras se juega. */
+  finishedAt?: number | null;
 }
 
 /** Vista de sala para un jugador concreto. */
@@ -82,6 +86,10 @@ export interface RoomView<V = unknown> {
   config: Record<string, number>;
   game: V | null;
   notice: Msg | null;
+  /** Inicio de la partida (epoch ms del servidor); null en el lobby. */
+  startedAt: number | null;
+  /** Fin de la partida (epoch ms del servidor); null si sigue en juego. */
+  finishedAt: number | null;
 }
 
 export type Unchanged = { unchanged: true };

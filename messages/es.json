@@ -30,6 +30,16 @@
     "codeLength": "El código tiene 4 letras.",
     "genericError": "Algo ha salido mal."
   },
+  "settings": {
+    "title": "Ajustes",
+    "handOrder": "Orden de tu mano",
+    "order": {
+      "suit": "Por palo",
+      "asc": "Ascendente",
+      "desc": "Descendente"
+    },
+    "language": "Idioma"
+  },
   "room": {
     "kickedTitle": "Ya no estás en esta sala",
     "kickedBody": "El anfitrión te ha echado o tu sesión ha caducado.",
@@ -140,7 +150,9 @@
     "pickSuitAria": "Elige un palo",
     "pickRankTitle": "¿Qué número exiges?",
     "pickSuitTitle": "¿Qué palo exiges?",
-    "pickNone": "Nada (la J es una carta normal)"
+    "pickNone": "Nada (la J es una carta normal)",
+    "matchTime": "Tiempo de partida",
+    "duration": "Duración: {time}"
   },
   "card": {
     "aria": "{rank} de {suit}",

@@ -205,7 +205,7 @@ export function RoomClient({ code }: { code: string }) {
       <div
         role='status'
         aria-live='polite'
-        className={`pointer-events-none fixed inset-x-0 top-4 z-[60] flex justify-center px-4 transition-all duration-200 ${
+        className={`safe-px-4 pointer-events-none fixed inset-x-0 top-[max(1rem,env(safe-area-inset-top))] z-[60] flex justify-center transition-[opacity,translate] duration-200 ease-out ${
           toast ? 'translate-y-0 opacity-100' : '-translate-y-3 opacity-0'
         }`}>
         {toast && (
@@ -220,8 +220,9 @@ export function RoomClient({ code }: { code: string }) {
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <main className='mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center px-6 text-center'>
-      <LocaleSwitcher className='absolute top-4 right-4' />
+    <main className='safe-px-6 mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center text-center'>
+      {/* Fijo al viewport (no al borde de la columna de 448 px) y respetando el área segura. */}
+      <LocaleSwitcher className='fixed top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))]' />
       {children}
     </main>
   );

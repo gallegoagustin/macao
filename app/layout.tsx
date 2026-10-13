@@ -15,6 +15,8 @@ export async function generateMetadata(): Promise<Metadata> {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // Pinta bajo la muesca y la barra de inicio; cada pantalla reserva su sitio con env(safe-area-inset-*).
+  viewportFit: 'cover',
   themeColor: '#0a2a21'
 };
 

@@ -63,7 +63,9 @@ export function roomView(room: Room, playerId: string): RoomView {
     ruleSet: { id: rs.id, config: rs.config },
     config: room.config,
     game: room.game ? rs.getView(room.game, playerId) : null,
-    notice: room.notice ?? null
+    notice: room.notice ?? null,
+    startedAt: room.startedAt ?? null,
+    finishedAt: room.finishedAt ?? null
   };
 }
 
@@ -135,7 +137,9 @@ export async function createRoom(rawName: unknown) {
       ruleSetId: rs.id,
       config: defaultConfig(rs.config),
       game: null,
-      notice: null
+      notice: null,
+      startedAt: null,
+      finishedAt: null
     };
     if (await store.create(room)) return { code: room.code, playerId, token };
   }
@@ -204,6 +208,8 @@ export async function startGame(code: string, token: string) {
     room.game = rs.createGame(players, room.config, secureRng(), prev ?? undefined);
     room.phase = 'playing';
     room.notice = null;
+    room.startedAt = Date.now();
+    room.finishedAt = null;
     return { room, result: (me as Member).id };
   }).then((me) => roomViewAfter(code, me));
 }
@@ -218,7 +224,10 @@ export async function gameAction(code: string, token: string, rawAction: unknown
     const res = rs.applyAction(room.game, (me as Member).id, action, secureRng());
     if (!res.ok) throw new HttpError(400, res.error.code, res.error.params);
     room.game = res.state;
-    if (rs.getStatus(res.state).finished) room.phase = 'finished';
+    if (rs.getStatus(res.state).finished) {
+      room.phase = 'finished';
+      room.finishedAt = Date.now();
+    }
     return { room, result: (me as Member).id };
   }).then((me) => roomViewAfter(code, me));
 }
@@ -231,6 +240,8 @@ function backToLobby(room: Room, notice: Msg): void {
   room.phase = 'lobby';
   room.game = null;
   room.notice = notice;
+  room.startedAt = null;
+  room.finishedAt = null;
 }
 
 /**

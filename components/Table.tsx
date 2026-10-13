@@ -2,12 +2,14 @@
 
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { formatElapsed } from '@/lib/client/clock';
+import { sortHand, useHandOrder } from '@/lib/client/handOrder';
 import { useMsg } from '@/lib/client/useMsg';
-import { type CardId, type Suit, RANKS, SUITS, SUIT_GLYPH, isRedSuit, parseCard } from '@/lib/rules/cards';
+import { type CardId, type Suit, SUITS, SUIT_GLYPH, isRedSuit, parseCard } from '@/lib/rules/cards';
 import { type PolacoView, checkPlay, ctxFromView } from '@/lib/rules/polaco';
 import type { RoomView } from '@/lib/types';
 import { ConfirmDialog } from './ConfirmDialog';
-import { LocaleSwitcher } from './LocaleSwitcher';
+import { MatchClock } from './MatchClock';
 import { CardBack, PlayingCard, useCardAriaLabel } from './PlayingCard';
 
 interface Props {
@@ -115,14 +117,9 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
     setSelected((sel) => (sel.every((c) => game.hand.includes(c)) ? sel : sel.filter((c) => game.hand.includes(c))));
   }, [game.hand]);
 
-  const sortedHand = useMemo(() => {
-    const sIdx = (s: Suit) => SUITS.indexOf(s);
-    return [...game.hand].sort((a, b) => {
-      const ca = parseCard(a);
-      const cb = parseCard(b);
-      return sIdx(ca.suit) - sIdx(cb.suit) || RANKS.indexOf(ca.rank) - RANKS.indexOf(cb.rank);
-    });
-  }, [game.hand]);
+  // Orden elegido en Ajustes (solo visual): las jugadas siempre referencian cartas por id, nunca por posición.
+  const [handOrder] = useHandOrder();
+  const sortedHand = useMemo(() => sortHand(game.hand, handOrder), [game.hand, handOrder]);
 
   const hand = useHandLayout(sortedHand.length);
   const playable = useMemo(() => new Set(game.legal.plays), [game.legal.plays]);
@@ -242,19 +239,26 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
 
   return (
     <main className='mx-auto flex min-h-dvh w-full max-w-5xl flex-col'>
-      {/* Cabecera */}
-      <header className='flex items-center justify-between gap-2 px-4 pt-3 pb-1 text-sm text-cream/60'>
-        <div className='flex items-center gap-3'>
-          <span className='font-display tracking-[0.25em]'>{view.code}</span>
-          <LocaleSwitcher />
+      {/* Cabecera: cronómetro + código apilados a la izquierda (caben a 360 px junto a las acciones). */}
+      <header className='safe-px-4 safe-pt-3 flex items-center justify-between gap-3 pb-1'>
+        <div className='flex min-w-0 flex-col gap-1 leading-none'>
+          {view.startedAt !== null ? (
+            <MatchClock
+              startedAt={view.startedAt}
+              finishedAt={view.finishedAt}
+              label={t('matchTime')}
+              className='text-base font-bold text-cream/90'
+            />
+          ) : null}
+          <span className='font-display text-xs tracking-[0.25em] text-cream/50'>{view.code}</span>
         </div>
-        <div className='flex items-center gap-2'>
+        <div className='flex shrink-0 items-center gap-2'>
           {isHost && !finished && (
-            <button className='btn btn-ghost !min-h-10 !px-3 text-xs' onClick={() => setConfirm('end')}>
+            <button className='btn btn-ghost !min-h-11 !px-3.5 text-xs' onClick={() => setConfirm('end')}>
               {t('endGame')}
             </button>
           )}
-          <button className='btn btn-ghost !min-h-10 !px-3 text-xs' onClick={() => setConfirm('leave')}>
+          <button className='btn btn-ghost !min-h-11 !px-3.5 text-xs' onClick={() => setConfirm('leave')}>
             {t('leave')}
           </button>
         </div>
@@ -348,7 +352,7 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
       </div>
 
       {/* Zona del jugador */}
-      <section className='sticky bottom-0 rounded-t-[28px] border-t border-brass/25 bg-felt-950/85 px-3 pt-3 pb-[max(env(safe-area-inset-bottom),12px)] backdrop-blur-md'>
+      <section className='safe-px-3 safe-pb-3 sticky bottom-0 rounded-t-[28px] border-t border-brass/25 bg-felt-950/85 pt-3 backdrop-blur-md'>
         <div className='mb-2 flex items-center justify-between gap-3 px-1'>
           <p className='min-w-0 truncate text-sm' aria-live='polite'>
             <span className={`font-bold ${myTurn ? 'text-brass-soft' : 'text-cream/80'}`}>{turnLine}</span>
@@ -486,7 +490,7 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
 
       {finished && (
         <div
-          className='fixed inset-0 z-40 grid place-items-center bg-black/60 p-5 backdrop-blur-[3px]'
+          className='safe-px-5 fixed inset-0 z-40 grid place-items-center bg-black/60 py-5 backdrop-blur-[3px]'
           role='dialog'
           aria-modal='true'
           aria-labelledby='winner-title'>
@@ -496,6 +500,11 @@ export function Table({ view, busy, send, onRematch, notify, onLeave, onEnd }: P
               {game.winnerId === me ? t('youWon') : t('winner', { name: nameOf.get(game.winnerId as string) ?? '?' })}
             </h2>
             <p className='mt-2 text-cream/70'>{game.winnerId === me ? t('youWonBody') : t('winnerBody')}</p>
+            {view.startedAt !== null && view.finishedAt !== null && (
+              <p className='mt-3 text-sm font-semibold text-cream/55 tabular-nums'>
+                {t('duration', { time: formatElapsed(view.finishedAt - view.startedAt) })}
+              </p>
+            )}
             <div className='mt-6'>
               {isHost ? (
                 <button className='btn btn-brass w-full text-lg' disabled={busy} onClick={onRematch}>
