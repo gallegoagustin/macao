@@ -17,7 +17,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   // Pinta bajo la muesca y la barra de inicio; cada pantalla reserva su sitio con env(safe-area-inset-*).
   viewportFit: 'cover',
-  themeColor: '#0a2a21'
+  themeColor: '#061a14'
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
