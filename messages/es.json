@@ -17,6 +17,10 @@
   "common": {
     "cancel": "Cancelar"
   },
+  "footer": {
+    "before": "Hecho con",
+    "after": "por"
+  },
   "home": {
     "tagline": "Cartas con amigos. Sin cuentas, sin complicaciones.",
     "nickLabel": "Tu apodo",

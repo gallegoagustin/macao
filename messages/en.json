@@ -17,6 +17,10 @@
   "common": {
     "cancel": "Cancel"
   },
+  "footer": {
+    "before": "Made with",
+    "after": "by"
+  },
   "home": {
     "tagline": "Cards with friends. No accounts, no hassle.",
     "nickLabel": "Your nickname",
