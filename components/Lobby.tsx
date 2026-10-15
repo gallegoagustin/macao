@@ -1,11 +1,12 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useMsg } from '@/lib/client/useMsg';
 import type { RoomView } from '@/lib/types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { LocaleSwitcher } from './LocaleSwitcher';
+import { ShareSheet } from './ShareSheet';
 
 interface Props {
   view: RoomView;
@@ -22,7 +23,8 @@ export function Lobby({ view, busy, onConfig, onKick, onStart, onLeave, notify }
   const tAll = useTranslations();
   const renderMsg = useMsg();
   const isHost = view.me === view.hostId;
-  const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const playerCount = view.players.length;
   /** Máximo efectivo de un campo: recorta por `valor × jugadores <= presupuesto`. */
@@ -31,27 +33,16 @@ export function Lobby({ view, busy, onConfig, onKick, onStart, onLeave, notify }
   const overCap = view.ruleSet.config.some((f) => (view.config[f.key] ?? f.default) > capOf(f));
   const canStart = playerCount >= 2 && !overCap;
 
-  async function copy(text: string) {
+  const closeShare = useCallback(() => setSharing(false), []);
+
+  async function copyCode() {
     try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
+      await navigator.clipboard.writeText(view.code);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 1600);
     } catch {
       notify(t('copyFailed'));
     }
-  }
-
-  async function share() {
-    const url = `${location.origin}/sala/${view.code}`;
-    if (typeof navigator.share === 'function') {
-      try {
-        await navigator.share({ title: 'Macao', text: t('shareText', { code: view.code }), url });
-        return;
-      } catch (e) {
-        if (e instanceof DOMException && e.name === 'AbortError') return;
-      }
-    }
-    await copy(url);
   }
 
   return (
@@ -78,10 +69,10 @@ export function Lobby({ view, busy, onConfig, onKick, onStart, onLeave, notify }
           ))}
         </div>
         <div className='mt-4 flex justify-center gap-3'>
-          <button className='btn btn-ghost' onClick={() => copy(view.code)}>
-            {copied ? t('copied') : t('copyCode')}
+          <button className='btn btn-ghost' onClick={copyCode}>
+            {copiedCode ? t('copied') : t('copyCode')}
           </button>
-          <button className='btn btn-brass' onClick={share}>
+          <button className='btn btn-brass' aria-haspopup='dialog' onClick={() => setSharing(true)}>
             {t('share')}
           </button>
         </div>
@@ -208,6 +199,7 @@ export function Lobby({ view, busy, onConfig, onKick, onStart, onLeave, notify }
           {t('leave')}
         </button>
       </div>
+      {sharing && <ShareSheet code={view.code} onClose={closeShare} />}
       {confirmLeave && (
         <ConfirmDialog
           title={t('leaveTitle')}

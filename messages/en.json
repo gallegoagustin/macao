@@ -3,6 +3,8 @@
     "title": "Macao",
     "description": "Play Macao (Polish) with your friends: create a room and share the code.",
     "roomTitle": "Room · Macao",
+    "roomTitleWithCode": "Room {code} · Macao",
+    "roomDescription": "Join my Macao game: code {code}",
     "turnTitle": "Your turn! · Macao"
   },
   "locale": {
@@ -64,7 +66,19 @@
     "copied": "Copied!",
     "copyFailed": "Couldn't copy. Select the code manually.",
     "share": "Share",
-    "shareText": "Join my Macao room with the code {code}",
+    "shareText": "Join my Macao game: code {code}",
+    "shareSheet": {
+      "title": "Share room",
+      "close": "Close",
+      "whatsapp": "WhatsApp",
+      "telegram": "Telegram",
+      "copyLink": "Copy link",
+      "linkCopied": "Link copied!",
+      "more": "More options…",
+      "linkLabel": "Room link",
+      "copyFailed": "Couldn't copy. Select the link manually.",
+      "newTab": "(opens in a new tab)"
+    },
     "players": "Players",
     "you": "(you)",
     "host": "Host",
